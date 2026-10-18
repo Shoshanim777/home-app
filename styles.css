@@ -65,7 +65,8 @@ body.trip-mode{background:var(--orange-ground)}
 .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:15px;line-height:1.6}
 
 .fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + var(--safe-b));width:calc(100% - 32px);max-width:488px;display:flex;gap:8px;z-index:5}
-.btn{height:60px;border:0;border-radius:20px;color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;flex:1}
+.btn{height:60px;border:0;border-radius:20px;color:#fff;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;flex:none}
+.fab .btn,.row2 .btn{flex:1}
 .btn.orange{background:var(--orange);box-shadow:0 10px 24px rgba(255,122,26,.35)}
 .btn.green{background:var(--green);box-shadow:0 10px 24px rgba(18,183,106,.3)}
 .btn.violet{background:var(--accent)}
