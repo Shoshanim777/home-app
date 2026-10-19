@@ -1,5 +1,5 @@
 // בדרך לסופר — service worker: offline shell + (next step) push notifications
-const VERSION = 'v1.0.2';
+const VERSION = 'v1.1.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

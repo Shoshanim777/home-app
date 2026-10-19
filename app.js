@@ -16,6 +16,7 @@ const I = {
   list: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>',
   home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v12h14V9"/></svg>',
   gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
+  grid: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
   heart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="#FF5C8A" stroke="#FF5C8A" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>'
 };
 
@@ -32,10 +33,40 @@ const CATS = [
   ['טיפוח ופארם', ['שמפו','משחת שיניים','מברשת','דאודורנט','תחבושות','חיתול','קרם','סבון ידיים','מרכך שיער','גילוח','צמר גפן','פלסטר','אקמול','ויטמין']]
 ];
 const CAT_ORDER = ['ירקות ופירות','מקרר','מאפים','בשר ודגים','מזווה','קפואים','משקאות','ניקיון ובית','טיפוח ופארם','אחר'];
-function guessCategory(name) {
+const CAT_ICON = { 'ירקות ופירות': '🥕', 'מקרר': '🥛', 'מאפים': '🍞', 'בשר ודגים': '🍗', 'מזווה': '🥫', 'קפואים': '🧊', 'משקאות': '🥤', 'ניקיון ובית': '🧽', 'טיפוח ופארם': '🧴', 'אחר': '🛒' };
+
+/* product catalog for "בחירה מרשימה" */
+const CATALOG = [
+  { name: 'ירקות ופירות', items: [['🍅','עגבניות'],['🥒','מלפפונים'],['🧅','בצל'],['🧄','שום'],['🥕','גזר'],['🫑','פלפל'],['🥬','חסה'],['🥔','תפוחי אדמה'],['🍠','בטטה'],['🥑','אבוקדו'],['🍆','חציל'],['🥦','ברוקולי'],['🍄','פטריות'],['🌿','פטרוזיליה'],['🌿','כוסברה'],['🌿','שמיר'],['🍋','לימון'],['🍌','בננות'],['🍎','תפוחים'],['🍊','תפוזים'],['🍐','אגסים'],['🍇','ענבים'],['🍓','תותים'],['🍉','אבטיח'],['🥭','מנגו']] },
+  { name: 'מקרר', items: [['🥛','חלב'],['🥚','ביצים'],['🧀','גבינה צהובה'],['🧀','גבינה לבנה'],['🥣','קוטג׳'],['🍶','יוגורט'],['🧈','חמאה'],['🥛','שמנת מתוקה'],['🍶','שמנת חמוצה'],['🍮','מעדנים'],['🧀','לבנה'],['🧀','בולגרית'],['🥛','שוקו']] },
+  { name: 'מאפים', items: [['🍞','לחם'],['🍞','לחם מחמצת'],['🫓','פיתות'],['🥖','באגט'],['🍞','לחמניות'],['🥯','בייגל'],['🥐','קרואסונים'],['🫓','טורטיות'],['🍞','חלה'],['🍰','עוגה']] },
+  { name: 'בשר ודגים', items: [['🍗','חזה עוף'],['🍗','שניצל'],['🍗','כרעיים'],['🍗','פרגיות'],['🥩','בשר טחון'],['🥩','סטייק'],['🍔','המבורגרים'],['🌭','נקניקיות'],['🐟','סלמון'],['🐟','פילה דג'],['🥓','פסטרמה']] },
+  { name: 'מזווה', items: [['🍚','אורז'],['🍝','פסטה'],['🍝','ספגטי'],['🌾','קמח'],['🍬','סוכר'],['🧂','מלח'],['🧂','פלפל שחור'],['🫒','שמן זית'],['🌻','שמן קנולה'],['☕','קפה'],['🍵','תה'],['🥣','קורנפלקס'],['🥣','גרנולה'],['🥫','טונה'],['🥫','רסק עגבניות'],['🫘','חומוס'],['🫘','עדשים'],['🫙','טחינה'],['🍯','דבש'],['🍓','ריבה'],['🍫','שוקולד'],['🍫','ממרח שוקולד'],['🥜','במבה'],['🥨','ביסלי'],['🍪','עוגיות'],['🥜','אגוזים'],['🫒','זיתים'],['🥒','מלפפון חמוץ'],['🍅','קטשופ'],['🥚','מיונז']] },
+  { name: 'קפואים', items: [['🍦','גלידה'],['🍕','פיצה קפואה'],['🥟','בורקס'],['🥞','מלאווח'],['🥦','ירקות קפואים'],['🍟','צ׳יפס קפוא'],['🧊','קרח']] },
+  { name: 'משקאות', items: [['💧','מים'],['🫧','סודה'],['🥤','קולה'],['🧃','מיץ'],['🍺','בירה'],['🍷','יין'],['🥛','חלב סויה'],['🥛','חלב שקדים']] },
+  { name: 'ניקיון ובית', items: [['🧻','נייר טואלט'],['🧻','מגבות נייר'],['🧻','טישו'],['🧽','ספוגים'],['🧴','נוזל כלים'],['🫧','טבליות למדיח'],['🧺','אבקת כביסה'],['🧴','מרכך כביסה'],['🗑️','שקיות זבל'],['🧼','סבון ידיים'],['🧪','אקונומיקה'],['🧹','מנקה רצפות'],['🧻','מגבונים'],['🔋','סוללות'],['💡','נורות'],['🥡','נייר אפייה'],['🥡','נייר כסף']] },
+  { name: 'טיפוח ופארם', items: [['🧴','שמפו'],['🧴','מרכך שיער'],['🪥','משחת שיניים'],['🪥','מברשות שיניים'],['🧴','דאודורנט'],['🪒','סכיני גילוח'],['🧴','קרם גוף'],['☀️','קרם הגנה'],['🩹','פלסטרים'],['💊','משככי כאבים'],['🧻','צמר גפן']] }
+];
+const CATALOG_MAP = new Map();
+for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { emo, cat: c.name });
+
+// catalog names, longest first, so "שוקולד מריר" matches "שוקולד" and never "שוקו"
+const CATALOG_KEYS = [...CATALOG_MAP.keys()].sort((a, b) => b.length - a.length);
+function catalogMatch(name) {
   const n = name.replace(/\s+/g, ' ').trim();
-  for (const [cat, words] of CATS) if (words.some(w => n.includes(w))) return cat;
-  return 'אחר';
+  if (CATALOG_MAP.has(n)) return CATALOG_MAP.get(n);
+  const k = CATALOG_KEYS.find(k => n.startsWith(k + ' ') || k.startsWith(n + ' '));
+  return k ? CATALOG_MAP.get(k) : null;
+}
+function guessCategory(name) {
+  const m = catalogMatch(name); if (m) return m.cat;
+  const n = name.replace(/\s+/g, ' ').trim();
+  let best = null, len = 0;
+  for (const [cat, words] of CATS) for (const w of words) if (w.length > len && n.includes(w)) { best = cat; len = w.length; }
+  return best || 'אחר';
+}
+function iconFor(name, category) {
+  return catalogMatch(name)?.emo || CAT_ICON[category] || '🛒';
 }
 
 /* ---------------- state ---------------- */
@@ -49,8 +80,10 @@ const S = {
   outbox: LS.get('ha_outbox', []), online: navigator.onLine,
   tab: 'list', authMode: 'login', authErr: '', busy: false,
   addText: '', history: LS.get('ha_history', {}),
-  shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null
+  shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
+  removing: new Map(), onboard: null, picker: null
 };
+const REMOVE_MS = 3000;
 let channel = null;
 
 function saveCache() {
@@ -186,17 +219,33 @@ const isNetErr = e => !navigator.onLine || /fetch|network|Failed/i.test(e?.messa
 function addItem(text) {
   const parsed = parseItem(text);
   if (!parsed) return;
-  const dup = superItems().find(i => i.name.trim() === parsed.name && !i.in_cart);
-  if (dup) { toast(parsed.name + ' כבר ברשימה'); return; }
+  if (addRow(parsed) === 'dup') toast(parsed.name + ' כבר ברשימה');
+  saveCache(); render();
+}
+function addRow({ name, qty = '1', note = '', category }) {
+  const existing = superItems().find(i => i.name.trim() === name && !i.in_cart);
+  if (existing) {
+    // re-adding an item that is fading out simply keeps it
+    if (S.removing.has(existing.id)) { clearTimeout(S.removing.get(existing.id).t); S.removing.delete(existing.id); return 'kept'; }
+    return 'dup';
+  }
   const row = {
     id: crypto.randomUUID(), household_id: S.household.id, list: 'super',
-    name: parsed.name, qty: parsed.qty, note: parsed.note, category: guessCategory(parsed.name),
+    name, qty, note, category: category || guessCategory(name),
     in_cart: false, added_by: S.user.id, created_at: new Date().toISOString()
   };
   S.items.push({ ...row, _pending: true });
-  S.history[parsed.name] = (S.history[parsed.name] || 0) + 1; LS.set('ha_history', S.history);
+  S.history[name] = (S.history[name] || 0) + 1; LS.set('ha_history', S.history);
   queue({ op: 'insert', row });
-  saveCache(); render();
+  return 'added';
+}
+function toggleRemove(id) {
+  const r = S.removing.get(id);
+  if (r) { clearTimeout(r.t); S.removing.delete(id); render(); return; }
+  vibrate(15);
+  const t = setTimeout(() => { S.removing.delete(id); deleteItem(id); }, REMOVE_MS);
+  S.removing.set(id, { t, at: Date.now() });
+  render();
 }
 function parseItem(text) {
   let t = text.replace(/\s+/g, ' ').trim();
@@ -217,6 +266,7 @@ function updateItem(id, patch) {
   saveCache(); render();
 }
 function deleteItem(id) {
+  const r = S.removing.get(id); if (r) { clearTimeout(r.t); S.removing.delete(id); }
   S.items = S.items.filter(i => i.id !== id);
   // an unsynced insert can simply be dropped
   const ins = S.outbox.findIndex(o => o.op === 'insert' && o.row.id === id);
@@ -276,7 +326,7 @@ function renderAuth() {
   const signup = S.authMode === 'signup';
   app.innerHTML = `
   <form class="auth" data-form="auth">
-    <div class="logo">${I.bulb.replace('stroke-width="2"', 'stroke="#fff" stroke-width="2"').replace('width="30" height="30"', 'width="44" height="44"')}</div>
+    <img class="logo-img" src="icon-512.png" alt="">
     <h1>בדרך לסופר</h1>
     <p>הרשימה המשותפת של הבית. מה שאחד מוסיף, השני רואה מיד.</p>
     <div class="field"><label for="em">אימייל</label><input id="em" name="email" type="email" autocomplete="email" required dir="ltr"></div>
@@ -288,36 +338,52 @@ function renderAuth() {
 }
 
 function renderOnboard() {
-  app.innerHTML = `
-  <div class="auth">
-    <div class="logo">${I.bulb.replace('stroke-width="2"', 'stroke="#fff" stroke-width="2"').replace('width="30" height="30"', 'width="44" height="44"')}</div>
-    <h1>ברוכים הבאים</h1>
-    <p>פותחים בית חדש, או מצטרפים עם הקוד שקיבלתם.</p>
+  const mode = S.onboard;
+  let inner;
+  if (mode === 'create') {
+    inner = `<h1>פתיחת בית חדש</h1>
+    <p>אחרי הפתיחה תקבל/י קוד לשלוח לשאר בני הבית.</p>
     <form data-form="create" style="display:flex;flex-direction:column;gap:12px">
       <div class="field"><label for="dn1">איך לקרוא לך?</label><input id="dn1" name="display" required maxlength="20" placeholder="למשל: דותן"></div>
-      <div class="field"><label for="hn">שם הבית</label><input id="hn" name="house" maxlength="40" placeholder="הבית של דותן ונועה"></div>
-      <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>פתיחת בית חדש</button>
-    </form>
-    <div style="text-align:center;color:var(--muted);font-size:14px">או</div>
+      <div class="field"><label for="hn">שם הבית (לא חובה)</label><input id="hn" name="house" maxlength="40" placeholder="הבית של דותן ונועה"></div>
+      <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>פתיחת הבית</button>
+    </form>`;
+  } else if (mode === 'join') {
+    inner = `<h1>הצטרפות לבית</h1>
+    <p>הקלידו את הקוד שקיבלתם בהודעה.</p>
     <form data-form="join" style="display:flex;flex-direction:column;gap:12px">
-      <div class="row2">
-        <div class="field" style="flex:1"><label for="dn2">איך לקרוא לך?</label><input id="dn2" name="display" required maxlength="20" placeholder="למשל: נועה"></div>
-        <div class="field" style="flex:1"><label for="cd">קוד הזמנה</label><input id="cd" name="code" required maxlength="6" dir="ltr" style="text-transform:uppercase;letter-spacing:3px"></div>
-      </div>
-      <button class="btn soft" type="submit" ${S.busy ? 'disabled' : ''}>הצטרפות לבית</button>
-    </form>
+      <div class="field"><label for="dn2">איך לקרוא לך?</label><input id="dn2" name="display" required maxlength="20" placeholder="למשל: נועה"></div>
+      <div class="field"><label for="cd">קוד הזמנה</label><input id="cd" name="code" required maxlength="6" dir="ltr" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:6px;text-align:center;font-size:22px;font-weight:700"></div>
+      <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>הצטרפות</button>
+    </form>`;
+  } else {
+    inner = `<h1>ברוכים הבאים</h1>
+    <p>רק אחד מכם פותח את הבית.<br>כל השאר מצטרפים עם הקוד שלו.</p>
+    <button class="choice" data-act="ob" data-mode="create"><span class="ce" aria-hidden="true">🏠</span><span><b>אני הראשון/ה בבית</b><small>פותחים בית חדש ומקבלים קוד לשאר</small></span></button>
+    <button class="choice" data-act="ob" data-mode="join"><span class="ce" aria-hidden="true">🔑</span><span><b>קיבלתי קוד הזמנה</b><small>מצטרפים לבית שכבר קיים</small></span></button>`;
+  }
+  app.innerHTML = `<div class="auth">
+    <img class="logo-img" src="icon-512.png" alt="">
+    ${inner}
     <div class="err">${esc(S.authErr)}</div>
-    <button class="link" data-act="signout">יציאה מהמשתמש</button>
+    ${mode ? '<button class="link" data-act="ob" data-mode="">חזרה</button>' : '<button class="link" data-act="signout">יציאה מהמשתמש</button>'}
   </div>`;
 }
 
 function itemRow(i, tripMode) {
   const newInTrip = S.trip && new Date(i.created_at) > new Date(S.trip.started_at) && i.added_by !== S.trip.shopper_id;
-  return `<div class="row ${i.in_cart ? 'done' : ''} ${i._pending ? 'pending' : ''}">
-    <button class="check" data-act="toggle" data-id="${i.id}" aria-label="${i.in_cart ? 'הוצאה מהעגלה' : 'סימון בעגלה'}: ${esc(i.name)}" aria-pressed="${i.in_cart}">${I.check}</button>
+  const rem = !tripMode && S.removing.get(i.id);
+  const done = tripMode ? i.in_cart : (i.in_cart || !!rem);
+  // someone else's cart progress during a trip is read-only for the people at home
+  const locked = !tripMode && i.in_cart && !rem;
+  const label = tripMode ? (i.in_cart ? 'הוצאה מהעגלה' : 'סימון בעגלה') : (rem ? 'ביטול מחיקה' : 'מחיקה מהרשימה');
+  const remStyle = rem ? ` style="animation-delay:-${Date.now() - rem.at}ms"` : '';
+  return `<div class="row ${done ? 'done' : ''} ${rem ? 'removing' : ''} ${i._pending ? 'pending' : ''}"${remStyle}>
+    <button class="check" data-act="toggle" data-id="${i.id}" aria-label="${label}: ${esc(i.name)}" aria-pressed="${done}" ${locked ? 'disabled' : ''}>${I.check}</button>
+    <span class="emo" aria-hidden="true">${iconFor(i.name, i.category)}</span>
     <button class="main" data-act="edit" data-id="${i.id}">
       <span class="name">${esc(i.name)}</span>
-      ${i.note ? `<span class="note">${esc(i.note)}</span>` : ''}
+      ${rem ? '<span class="note">נמחק · לחיצה על ✓ מבטלת</span>' : (i.note ? `<span class="note">${esc(i.note)}</span>` : '')}
     </button>
     ${tripMode && newInTrip ? '<span class="new">חדש</span>' : ''}
     ${i.qty && i.qty !== '1' ? `<span class="qty">${esc(i.qty)}</span>` : ''}
@@ -374,7 +440,7 @@ function renderMain() {
         <input id="add-input" type="text" placeholder="${trip && !iShop ? 'להוסיף ברגע האחרון…' : 'מה חסר? למשל: חלב ×2, תנובה'}" aria-label="הוספת פריט" autocomplete="off" enterkeyhint="done" value="${esc(S.addText)}">
         <button class="go" type="submit">הוספה</button>
       </form>
-      ${histChips ? `<div class="chips">${histChips}</div>` : ''}`;
+      <div class="chips"><button class="chip pick" data-act="pick-open">${I.grid} בחירה מרשימה</button>${histChips}</div>`;
 
     let list;
     if (!items.length) {
@@ -414,10 +480,60 @@ function renderMain() {
 
 /* ---------------- sheets ---------------- */
 const sheetRoot = document.getElementById('sheet-root');
-function openSheet(html) {
-  sheetRoot.innerHTML = `<div class="backdrop" data-act="backdrop"><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
+function openSheet(html, cls = '') {
+  sheetRoot.innerHTML = `<div class="backdrop" data-act="backdrop"><div class="sheet ${cls}" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div></div>`;
 }
-function closeSheet() { sheetRoot.innerHTML = ''; S.confirmFor = S.confirmFor; }
+function closeSheet() { sheetRoot.innerHTML = ''; S.picker = null; }
+
+/* ---- "בחירה מרשימה" picker ---- */
+function openPicker() {
+  S.picker = { cat: CATALOG[0].name, sel: {} };
+  openSheet(pickerHtml(), 'tall');
+}
+function pickerHtml() {
+  const P = S.picker;
+  const cat = CATALOG.find(c => c.name === P.cat);
+  const inList = new Set(superItems().filter(i => !S.removing.has(i.id)).map(i => i.name));
+  const count = Object.keys(P.sel).length;
+  const selIn = c => c.items.filter(([, n]) => P.sel[n]).length;
+  return `<div class="pk-head"><h2>בחירה מרשימה</h2>
+      <button class="pk-x" data-act="backdrop-close" aria-label="סגירה">${I.x}</button></div>
+    <div class="pk-tabs" id="pk-tabs">${CATALOG.map(c => `<button class="pk-tab ${c.name === P.cat ? 'on' : ''}" data-act="pick-cat" data-cat="${esc(c.name)}"><span aria-hidden="true">${CAT_ICON[c.name]}</span> ${esc(c.name)}${selIn(c) ? `<b>${selIn(c)}</b>` : ''}</button>`).join('')}</div>
+    <div class="pk-list" id="pk-list">${cat.items.map(([emo, name]) => {
+      const q = P.sel[name]; const has = inList.has(name);
+      return `<div class="pk-row ${q ? 'on' : ''} ${has ? 'has' : ''}">
+        <button class="pk-main" data-act="pick-toggle" data-name="${esc(name)}" ${has ? 'disabled' : ''} aria-pressed="${!!q}">
+          <span class="pk-box">${I.check}</span>
+          <span class="pk-emo" aria-hidden="true">${emo}</span>
+          <span class="pk-name">${esc(name)}</span>
+          ${has ? '<span class="pk-has">כבר ברשימה</span>' : ''}
+        </button>
+        ${q ? `<div class="pk-step">
+          <button data-act="pick-inc" data-name="${esc(name)}" aria-label="עוד ${esc(name)}">+</button>
+          <span aria-live="polite">${q}</span>
+          <button data-act="pick-dec" data-name="${esc(name)}" aria-label="פחות ${esc(name)}">−</button>
+        </div>` : ''}
+      </div>`;
+    }).join('')}</div>
+    <button class="btn violet" data-act="pick-add" ${count ? '' : 'disabled'}>${count ? `הוספה לרשימה (${count})` : 'בוחרים מוצרים ומוסיפים'}</button>`;
+}
+function refreshPicker(resetScroll) {
+  const sheet = sheetRoot.querySelector('.sheet'); if (!sheet || !S.picker) return;
+  const top = resetScroll ? 0 : (document.getElementById('pk-list')?.scrollTop || 0);
+  const left = document.getElementById('pk-tabs')?.scrollLeft || 0;
+  sheet.innerHTML = '<div class="grab"></div>' + pickerHtml();
+  document.getElementById('pk-list').scrollTop = top;
+  document.getElementById('pk-tabs').scrollLeft = left;
+}
+function pickerAdd() {
+  const P = S.picker; let added = 0, kept = 0;
+  for (const [name, q] of Object.entries(P.sel)) {
+    const r = addRow({ name, qty: String(q), category: CATALOG_MAP.get(name)?.cat });
+    if (r === 'added') added++; else if (r === 'kept') kept++;
+  }
+  closeSheet(); saveCache(); render();
+  if (added + kept) { vibrate(20); toast(`נוספו ${added + kept} מוצרים לרשימה`); }
+}
 
 function openConfirm(fromTimer) {
   const items = superItems();
@@ -513,7 +629,20 @@ document.addEventListener('click', async e => {
   switch (act) {
     case 'backdrop': closeSheet(); break;
     case 'auth-toggle': S.authMode = S.authMode === 'login' ? 'signup' : 'login'; S.authErr = ''; render(); break;
-    case 'toggle': { const it = S.items.find(i => i.id === b.dataset.id); if (it) { vibrate(15); updateItem(it.id, { in_cart: !it.in_cart }); } break; }
+    case 'toggle': {
+      const it = S.items.find(i => i.id === b.dataset.id); if (!it) break;
+      const iShop = S.trip && S.trip.shopper_id === S.user.id;
+      if (iShop) { vibrate(15); updateItem(it.id, { in_cart: !it.in_cart }); }
+      else toggleRemove(it.id);
+      break;
+    }
+    case 'ob': S.onboard = b.dataset.mode || null; S.authErr = ''; render(); break;
+    case 'pick-open': openPicker(); break;
+    case 'pick-cat': S.picker.cat = b.dataset.cat; refreshPicker(true); break;
+    case 'pick-toggle': { const n = b.dataset.name; if (S.picker.sel[n]) delete S.picker.sel[n]; else { S.picker.sel[n] = 1; vibrate(10); } refreshPicker(); break; }
+    case 'pick-inc': { const n = b.dataset.name; S.picker.sel[n] = Math.min(99, (S.picker.sel[n] || 0) + 1); refreshPicker(); break; }
+    case 'pick-dec': { const n = b.dataset.name; const q = (S.picker.sel[n] || 1) - 1; if (q <= 0) delete S.picker.sel[n]; else S.picker.sel[n] = q; refreshPicker(); break; }
+    case 'pick-add': pickerAdd(); break;
     case 'edit': openEdit(b.dataset.id); break;
     case 'delete': closeSheet(); deleteItem(b.dataset.id); break;
     case 'quick': addItem(b.dataset.name); break;
@@ -622,7 +751,7 @@ setInterval(() => {
       S.confirmFor = key; vibrate([100, 60, 100]); openConfirm(true);
     }
   }
-  if (S.trip && !sheetRoot.innerHTML) render(); // keep the minutes counter fresh
+  if (S.trip && !sheetRoot.innerHTML && !S.removing.size) render(); // keep the minutes counter fresh
 }, 15000);
 
 setTimeout(() => { if (S.booting) { S.booting = false; render(); } }, 2500);
