@@ -22,6 +22,7 @@ const I = {
   chat: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></svg>',
   more: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   bell: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>',
+  stats: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>',
   send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 21 4l-7.5 18-2.5-7.5z"/></svg>'
 };
 
@@ -66,7 +67,7 @@ const LS = {
 };
 const S = {
   booting: true, session: null, user: null,
-  household: null, members: {}, items: [], trip: null, messages: [], custom: [],
+  household: null, members: {}, items: [], trip: null, messages: [], custom: [], prices: {}, stats: null,
   outbox: LS.get('ha_outbox', []), online: navigator.onLine,
   tab: 'list', authMode: 'login', authErr: '', busy: false,
   addText: '', history: LS.get('ha_history', {}),
@@ -107,11 +108,11 @@ function catOrder() {
 
 function saveCache() {
   if (!S.user) return;
-  LS.set('ha_cache_' + S.user.id, { household: S.household, members: S.members, items: S.items, trip: S.trip, messages: S.messages.slice(-60), custom: S.custom });
+  LS.set('ha_cache_' + S.user.id, { household: S.household, members: S.members, items: S.items, trip: S.trip, messages: S.messages.slice(-60), custom: S.custom, prices: S.prices });
 }
 function loadCache() {
   const c = LS.get('ha_cache_' + S.user.id, null);
-  if (c) Object.assign(S, { household: c.household, members: c.members || {}, items: c.items || [], trip: c.trip, messages: c.messages || [], custom: c.custom || [] });
+  if (c) Object.assign(S, { household: c.household, members: c.members || {}, items: c.items || [], trip: c.trip, messages: c.messages || [], custom: c.custom || [], prices: c.prices || {} });
   S.lastRead = LS.get('ha_lastread_' + S.user.id, 0);
   rebuildProducts();
 }
@@ -127,6 +128,22 @@ const iShop = () => !!(S.trip && S.user && S.trip.shopper_id === S.user.id);
 const others = () => Object.values(S.members).filter(m => m.user_id !== S.user?.id);
 const othersName = () => { const o = others().map(m => m.display_name); return o.length ? o.join(' ו') : 'בני הבית'; };
 const unread = () => S.messages.filter(m => m.sender_id !== S.user?.id && new Date(m.created_at).getTime() > S.lastRead).length;
+const ILS = n => '₪' + Number(n).toLocaleString('he-IL', { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const qtyNum = q => /^\d+$/.test(q || '1') ? parseInt(q || '1', 10) : 1;
+const priceOf = name => S.prices[name]?.price ?? null;
+function basket(items) {
+  let sum = 0, known = 0;
+  for (const i of items) { const p = priceOf(i.name); if (p != null) { sum += p * qtyNum(i.qty); known++; } }
+  return { sum: Math.round(sum * 100) / 100, known, total: items.length };
+}
+function parsePrice(v) { const n = parseFloat(String(v || '').replace(/[^\d.,]/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 && n < 100000 ? Math.round(n * 100) / 100 : null; }
+async function setPrice(name, price) {
+  if (price == null || priceOf(name) === price) return;
+  S.prices[name] = { price, updated_at: new Date().toISOString() };
+  saveCache(); render();
+  const { error } = await sb.from('price_history').insert({ household_id: S.household.id, name, price, recorded_by: S.user.id });
+  if (error) { console.warn(error); toast('המחיר לא נשמר'); }
+}
 const hhmm = t => new Date(t).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
 function toast(msg, ms = 3200) {
@@ -194,15 +211,17 @@ async function loadAll() {
   if (!mem || !mem.length) { Object.assign(S, { household: null, members: {}, items: [], trip: null, messages: [], custom: [] }); saveCache(); return; }
   const hid = mem[0].household_id;
   const since = new Date(Date.now() - 48 * 3600e3).toISOString();
-  const [h, m, it, tr, ms, cp] = await Promise.all([
+  const [h, m, it, tr, ms, cp, pp] = await Promise.all([
     sb.from('households').select('*').eq('id', hid).single(),
     sb.from('members').select('user_id, display_name, color').eq('household_id', hid),
     sb.from('items').select('*').eq('household_id', hid).order('created_at'),
     sb.from('trips').select('*').eq('household_id', hid).eq('status', 'active').maybeSingle(),
     sb.from('messages').select('*').eq('household_id', hid).gte('created_at', since).order('created_at').limit(200),
-    sb.from('custom_products').select('*').eq('household_id', hid).order('name')
+    sb.from('custom_products').select('*').eq('household_id', hid).order('name'),
+    sb.from('product_prices').select('name, price, updated_at').eq('household_id', hid)
   ]);
   for (const r of [h, m, it, tr, ms, cp]) if (r.error) throw r.error;
+  if (!pp.error) S.prices = Object.fromEntries(pp.data.map(x => [x.name, { price: Number(x.price), updated_at: x.updated_at }]));
   S.household = h.data;
   S.members = Object.fromEntries(m.data.map(x => [x.user_id, x]));
   S.items = mergePending(it.data);
@@ -235,6 +254,9 @@ function subscribe() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trips', filter: f }, onTrip)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: f }, onMessage)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_products', filter: f }, onCustom)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'product_prices', filter: f }, ({ new: n }) => {
+      if (n?.name) { S.prices[n.name] = { price: Number(n.price), updated_at: n.updated_at }; saveCache(); render(); }
+    })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'households', filter: 'id=eq.' + hid }, ({ new: n }) => { S.household = { ...S.household, ...n }; saveCache(); render(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'members', filter: f }, async () => {
       const { data } = await sb.from('members').select('user_id, display_name, color').eq('household_id', hid);
@@ -437,10 +459,10 @@ async function startTrip() {
   const t = await rpc('start_trip', { p_household: S.household.id, p_minutes: 15 });
   if (t) { S.trip = t; resetCartLocally(); vibrate(60); saveCache(); render(); notify('trip_start'); }
 }
-async function finishTrip() {
+async function finishTrip(total = null) {
   closeSheet();
   await flush();
-  const t = await rpc('finish_trip', { p_trip: S.trip.id });
+  const t = await rpc('finish_trip', { p_trip: S.trip.id, p_total: total });
   if (t) { S.items = S.items.filter(i => !(i.list === 'super' && i.in_cart)); S.trip = null; saveCache(); showThanks(t); render(); notify('trip_done', { trip: t.id }); }
 }
 async function snoozeTrip(min) {
@@ -532,6 +554,10 @@ function itemRow(i, tripMode) {
   const qtyEl = tripMode
     ? (i.qty && i.qty !== '1' ? `<span class="qty">${esc(i.qty)}</span>` : '')
     : `<button class="qty ${i.qty === '1' ? 'one' : ''}" data-act="${numeric ? 'qty-inc' : 'edit'}" data-id="${i.id}" aria-label="כמות ${esc(i.qty)}${numeric ? ', לחיצה להוספת אחד' : ''}">${numeric && i.qty === '1' ? '+1' : esc(i.qty)}</button>`;
+  const p = priceOf(i.name);
+  let priceEl = '';
+  if (tripMode && i.in_cart) priceEl = `<button class="price ${p == null ? 'unknown' : ''}" data-act="price" data-id="${i.id}" aria-label="מחיר ${esc(i.name)}">${p == null ? '+₪' : ILS(p)}</button>`;
+  else if (p != null && !rem) priceEl = `<span class="price-t">${ILS(p * qtyNum(i.qty))}</span>`;
   return `<div class="row ${done ? 'done' : ''} ${rem ? 'removing' : ''} ${i._pending ? 'pending' : ''} ${i.status === 'oos' ? 'oos' : ''}"${remStyle}>
     <button class="check" data-act="toggle" data-id="${i.id}" aria-label="${label}: ${esc(i.name)}" aria-pressed="${done}" ${locked ? 'disabled' : ''}>${I.check}</button>
     <span class="emo" aria-hidden="true">${iconFor(i.name, i.category)}</span>
@@ -540,6 +566,7 @@ function itemRow(i, tripMode) {
     </button>
     ${i.status === 'oos' && !rem ? '<span class="tag oos">לא היה במלאי</span>' : ''}
     ${tripMode && newInTrip ? '<span class="new">חדש</span>' : ''}
+    ${priceEl}
     ${qtyEl}
     ${tripMode ? `<button class="more" data-act="item-more" data-id="${i.id}" aria-label="אפשרויות עבור ${esc(i.name)}">${I.more}</button>`
                : `<span class="av sm" style="background:${colorOf(i.added_by)}" title="${esc(nameOf(i.added_by))}">${esc(initial(i.added_by))}</span>`}
@@ -559,9 +586,13 @@ function renderMain() {
   const inCart = items.filter(i => i.in_cart).length;
   const memberList = Object.values(S.members);
   const order = catOrder();
+  const cartB = basket(items.filter(i => i.in_cart));
+  const listB = basket(items.filter(i => !i.in_cart));
 
   let body = '';
-  if (S.tab === 'family') {
+  if (S.tab === 'stats') {
+    body = renderStats();
+  } else if (S.tab === 'family') {
     body = `<div class="top"><div><div class="sub">${esc(S.household.name)}</div><h1>חדר משפחה</h1></div>${chatButton()}</div>
       <div class="empty">כאן יהיו בקשות ("מישהו יכול להביא...") ורשימות נוספות:<br>בית מרקחת, תיקונים בבית, מתנות.<br><b>מגיע בגרסה 2.</b></div>`;
   } else {
@@ -576,7 +607,7 @@ function renderMain() {
       status = `<div class="hero">
         <div class="lamp on">${I.bulb}</div>
         <div class="t1">את/ה בדרך לסופר</div>
-        <div class="t2">${minsSince(trip.started_at)} דק׳ · ${inCart} מתוך ${items.length} בעגלה</div>
+        <div class="t2">${minsSince(trip.started_at)} דק׳ · ${inCart} מתוך ${items.length} בעגלה${cartB.known ? ' · בעגלה כ־' + ILS(cartB.sum) : ''}</div>
         <div class="t3">חסר משהו? ⋯ ליד המוצר: "לא היה", "לקחתי משהו אחר" או שאלה</div>
       </div>`;
     } else if (trip) {
@@ -589,7 +620,7 @@ function renderMain() {
       status = `<div class="status">
         <div class="lamp">${I.bulb}</div>
         <div><div class="t1">אף אחד לא בדרך</div>
-        <div class="t2">${open ? open + ' פריטים מחכים לקנייה' : 'הרשימה ריקה. מה חסר?'}</div></div>
+        <div class="t2">${open ? open + ' פריטים מחכים לקנייה' : 'הרשימה ריקה. מה חסר?'}${listB.known ? ` · סל משוער ${ILS(listB.sum)}${listB.known < listB.total ? ` <span class="muted">(${listB.known}/${listB.total} עם מחיר)</span>` : ''}` : ''}</div></div>
       </div>`;
     }
 
@@ -645,7 +676,8 @@ function renderMain() {
 
   const nav = `<nav class="tabs">
     <button class="${S.tab === 'list' ? 'active' : ''}" data-act="tab" data-tab="list">${I.list} סופר</button>
-    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>חדר משפחה <span class="soon">בקרוב</span></span></button>
+    <button class="${S.tab === 'stats' ? 'active' : ''}" data-act="tab" data-tab="stats">${I.stats} סטטיסטיקה</button>
+    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>משפחה <span class="soon">בקרוב</span></span></button>
     <button data-act="settings">${I.gear} הגדרות</button>
   </nav>`;
   return `<div class="screen ${S.trip && S.tab === 'list' ? 'trip' : ''}">${body}</div>${nav}`;
@@ -789,16 +821,25 @@ function openConfirm(fromTimer) {
   const inCart = items.filter(i => i.in_cart);
   const left = items.filter(i => !i.in_cart);
   const pct = items.length ? Math.round(inCart.length / items.length * 100) : 0;
+  const est = basket(inCart);
+  const noPrice = inCart.filter(i => priceOf(i.name) == null);
   openSheet(`
     <div><h2>${fromTimer ? 'איך הלך בסופר?' : 'לסיים את הקנייה?'}</h2>
     <div class="lead">${fromTimer ? 'עברו ' + minsSince(S.trip.started_at) + ' דקות. ' : ''}סימנת ${inCart.length} מתוך ${items.length} פריטים בעגלה</div></div>
     <div class="bar"><div style="width:${pct}%"></div></div>
     ${left.length ? `<div class="left-box"><div class="h">יישארו ברשימה לפעם הבאה</div><div class="pills">${left.map(i => `<span>${i.status === 'oos' ? '❌ ' : ''}${esc(i.name)}</span>`).join('')}</div></div>` : ''}
-    <button class="btn green" data-act="finish">סיימתי, אפשר לסגור</button>
+    <form data-form="finish" class="finish-form">
+      <div class="field"><label for="ftot">כמה יצא בקופה? <span class="muted">(לא חובה)</span></label>
+        <div class="money"><span>₪</span><input id="ftot" name="total" inputmode="decimal" autocomplete="off" placeholder="${est.known ? 'משוער ' + est.sum : 'הסכום בקבלה'}"></div></div>
+      ${noPrice.length ? `<details class="miss"><summary>מחירים חסרים (${noPrice.length}) · אפשר להעתיק מהקבלה</summary>
+        ${noPrice.map(i => `<label class="mp"><span>${iconFor(i.name, i.category)} ${esc(i.name)}${qtyNum(i.qty) > 1 ? ` <span class="muted">×${qtyNum(i.qty)}, מחיר ליחידה</span>` : ''}</span>
+          <span class="money sm"><span>₪</span><input name="p_${i.id}" inputmode="decimal" autocomplete="off" aria-label="מחיר ${esc(i.name)}"></span></label>`).join('')}</details>` : ''}
+      <button class="btn green" type="submit">סיימתי, אפשר לסגור</button>
+    </form>
     <div class="row2">
       <button class="btn soft" data-act="snooze">עוד 10 דקות</button>
       <button class="btn ghost" data-act="cancel">לא יצא, ביטלתי</button>
-    </div>`, '', 'confirm');
+    </div>`, 'tall scroll', 'confirm');
 }
 
 function openEdit(id) {
@@ -813,6 +854,8 @@ function openEdit(id) {
           <div class="stepper"><button type="button" data-act="eq-inc" aria-label="עוד אחד">+</button><input id="eq" name="qty" value="${esc(i.qty)}" maxlength="20"><button type="button" data-act="eq-dec" aria-label="אחד פחות">−</button></div></div>
         <div class="field" style="flex:1"><label for="eo">הערה</label><input id="eo" name="note" value="${esc(i.note)}" maxlength="120" placeholder="מותג, גודל…"></div>
       </div>
+      <div class="field"><label for="epr">מחיר ליחידה <span class="muted">${priceOf(i.name) != null ? '· עודכן ' + new Date(S.prices[i.name].updated_at).toLocaleDateString('he-IL') : '(לא חובה)'}</span></label>
+        <div class="money"><span>₪</span><input id="epr" name="price" inputmode="decimal" autocomplete="off" value="${priceOf(i.name) ?? ''}"></div></div>
       <div style="font-size:13px;color:var(--muted)">נוסף ע״י ${esc(nameOf(i.added_by))} · ${esc(i.category)}</div>
       ${i.status === 'oos' ? `<button type="button" class="btn ghost" data-act="clear-status" data-id="${i.id}">❌ סומן "לא היה במלאי" · הסרת הסימון</button>` : ''}
       <button class="btn violet" type="submit">שמירה</button>
@@ -856,6 +899,105 @@ function orderHtml() {
     <div class="row2"><button class="btn ghost" data-act="ord-reset">ברירת מחדל</button><button class="btn violet" data-act="ord-save">שמירה</button></div>`;
 }
 
+/* ---- prices ---- */
+function openPrice(id) {
+  const i = S.items.find(x => x.id === id); if (!i) return;
+  const p = priceOf(i.name); const q = qtyNum(i.qty);
+  openSheet(`${sheetHead(`${iconFor(i.name, i.category)} ${esc(i.name)}`)}
+    <form data-form="price" data-id="${i.id}" class="finish-form">
+      <div class="field"><label for="pp">מחיר ליחידה${q > 1 ? ` <span class="muted">(בעגלה ${q} יח׳)</span>` : ''}</label>
+        <div class="money big"><span>₪</span><input id="pp" name="price" inputmode="decimal" autocomplete="off" value="${p ?? ''}" placeholder="0.00" required></div></div>
+      ${p != null ? `<div class="muted">המחיר הקודם: ${ILS(p)} · ${new Date(S.prices[i.name].updated_at).toLocaleDateString('he-IL')}</div>` : '<div class="muted">המחיר יישמר ויופיע ליד המוצר בפעם הבאה, אצל שניכם.</div>'}
+      <button class="btn violet" type="submit">שמירה</button>
+    </form>`, '', 'price');
+  setTimeout(() => { const el = document.getElementById('pp'); el?.focus(); el?.select(); }, 80);
+}
+function openTripTotal(id) {
+  const t = S.stats?.trips.find(x => x.id === id); if (!t) return;
+  openSheet(`${sheetHead('כמה יצא בקופה?')}
+    <div class="lead">קנייה של ${esc(nameOf(t.shopper_id))} · ${new Date(t.finished_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}${t.estimated_total ? ' · משוער ' + ILS(t.estimated_total) : ''}</div>
+    <form data-form="trip-total" data-id="${t.id}" class="finish-form">
+      <div class="money big"><span>₪</span><input name="total" inputmode="decimal" autocomplete="off" value="${t.actual_total ?? ''}" placeholder="הסכום בקבלה" aria-label="סכום בקופה"></div>
+      <button class="btn violet" type="submit">שמירה</button>
+    </form>`, '', 'trip-total');
+}
+
+/* ---- statistics ---- */
+async function loadStats() {
+  if (!S.household) return;
+  const since = new Date(Date.now() - 365 * 864e5).toISOString();
+  const hid = S.household.id;
+  const [tr, pu, ph] = await Promise.all([
+    sb.from('trips').select('*').eq('household_id', hid).eq('status', 'done').gte('finished_at', since).order('finished_at', { ascending: false }).limit(500),
+    sb.from('purchases').select('name, qty, category, price, created_at, trip_id').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(3000),
+    sb.from('price_history').select('name, price, recorded_at').eq('household_id', hid).gte('recorded_at', since).order('recorded_at', { ascending: false }).limit(3000)
+  ]);
+  if (tr.error || pu.error || ph.error) { if (S.tab === 'stats') toast('לא הצלחתי לטעון סטטיסטיקה'); return; }
+  S.stats = { trips: tr.data, purchases: pu.data, history: ph.data, at: Date.now() };
+  if (S.tab === 'stats') render();
+}
+const tripSum = t => t.actual_total != null ? Number(t.actual_total) : t.estimated_total != null ? Number(t.estimated_total) : null;
+const MONTHS = ['ינו׳','פבר׳','מרץ','אפר׳','מאי','יוני','יולי','אוג׳','ספט׳','אוק׳','נוב׳','דצמ׳'];
+function renderStats() {
+  const head = `<div class="top"><div><div class="sub">${esc(S.household.name)}</div><h1>סטטיסטיקה</h1></div>${chatButton()}</div>`;
+  const st = S.stats;
+  if (!st) return head + '<div class="empty">טוען…</div>';
+  if (!st.trips.length) return head + `<div class="empty">עוד אין קניות סגורות.<br>אחרי שתסיימו קנייה ותכתבו כמה יצא בקופה,<br>יופיעו כאן ההוצאות, המגמות והמוצרים הקבועים שלכם.</div>`;
+
+  const now = new Date();
+  const ym = d => d.getFullYear() * 12 + d.getMonth();
+  const curM = ym(now);
+  const byMonth = {};
+  for (const t of st.trips) { const k = ym(new Date(t.finished_at)); const v = tripSum(t); (byMonth[k] ||= { sum: 0, n: 0, est: false }); byMonth[k].n++; if (v != null) byMonth[k].sum += v; if (t.actual_total == null && v != null) byMonth[k].est = true; }
+  const thisM = byMonth[curM] || { sum: 0, n: 0 }, lastM = byMonth[curM - 1] || { sum: 0, n: 0 };
+  const withSum = st.trips.filter(t => tripSum(t) != null);
+  const avg = withSum.length ? withSum.reduce((a, t) => a + tripSum(t), 0) / withSum.length : null;
+  const diff = lastM.sum ? Math.round((thisM.sum - lastM.sum) / lastM.sum * 100) : null;
+
+  const months = Array.from({ length: 6 }, (_, k) => curM - 5 + k);
+  const maxM = Math.max(1, ...months.map(m => byMonth[m]?.sum || 0));
+  const chart = `<div class="bars" role="img" aria-label="הוצאה חודשית בששת החודשים האחרונים">${months.map(m => {
+    const v = byMonth[m]?.sum || 0;
+    return `<div class="bar-c"><div class="bar-v">${v ? ILS(Math.round(v)) : ''}</div><div class="bar-b ${m === curM ? 'cur' : ''}" style="height:${Math.max(3, Math.round(v / maxM * 120))}px"></div><div class="bar-l">${MONTHS[m % 12]}</div></div>`;
+  }).join('')}</div>`;
+
+  const who = {};
+  for (const t of st.trips) { (who[t.shopper_id] ||= { n: 0, sum: 0 }); who[t.shopper_id].n++; who[t.shopper_id].sum += tripSum(t) || 0; }
+  const whoHtml = Object.entries(who).sort((a, b) => b[1].n - a[1].n).map(([id, w]) =>
+    `<div class="who"><span class="av" style="background:${colorOf(id)}">${esc(initial(id))}</span><span class="who-n">${esc(nameOf(id))}</span><span class="muted">${w.n} קניות${w.sum ? ' · ' + ILS(Math.round(w.sum)) : ''}</span></div>`).join('');
+
+  const counts = {};
+  for (const p of st.purchases) { (counts[p.name] ||= { n: 0, cat: p.category }); counts[p.name].n++; }
+  const top = Object.entries(counts).sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  const topHtml = top.map(([n, c], k) => `<div class="top-i"><span class="ord-n">${k + 1}</span><span aria-hidden="true">${iconFor(n, c.cat)}</span><span class="who-n">${esc(n)}</span><span class="muted">${c.n} פעמים${priceOf(n) != null ? ' · ' + ILS(priceOf(n)) : ''}</span></div>`).join('');
+
+  // price changes: latest vs. previous different price per product
+  const hist = {};
+  for (const h of st.history) (hist[h.name] ||= []).push(Number(h.price));
+  const changes = Object.entries(hist).map(([n, ps]) => { const cur = ps[0]; const prev = ps.find(x => x !== cur); return prev ? { n, cur, prev, pct: Math.round((cur - prev) / prev * 100) } : null; })
+    .filter(Boolean).sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 8);
+  const chHtml = changes.map(c => `<div class="top-i"><span aria-hidden="true">${iconFor(c.n)}</span><span class="who-n">${esc(c.n)}</span>
+    <span class="chg ${c.pct > 0 ? 'up' : 'down'}">${c.pct > 0 ? '▲' : '▼'} ${Math.abs(c.pct)}%</span><span class="muted">${ILS(c.prev)} ← ${ILS(c.cur)}</span></div>`).join('');
+
+  const recent = st.trips.slice(0, 10).map(t => `<button class="trip-r" data-act="trip-total" data-id="${t.id}">
+    <span class="av sm" style="background:${colorOf(t.shopper_id)}">${esc(initial(t.shopper_id))}</span>
+    <span class="who-n">${new Date(t.finished_at).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}<span class="muted"> · ${t.bought_count ?? 0} פריטים</span></span>
+    <span class="tr-sum ${t.actual_total == null ? 'est' : ''}">${t.actual_total != null ? ILS(t.actual_total) : t.estimated_total != null ? '~' + ILS(t.estimated_total) : '+ סכום'}</span></button>`).join('');
+
+  return head + `<div class="stats-wrap">
+    <div class="kpis">
+      <div class="kpi main"><span>החודש</span><b>${ILS(Math.round(thisM.sum))}</b><small>${thisM.n} קניות${diff != null ? ` · <span class="chg ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)}%</span> מחודש שעבר` : ''}</small></div>
+      <div class="kpi"><span>ממוצע לקנייה</span><b>${avg != null ? ILS(Math.round(avg)) : '—'}</b></div>
+      <div class="kpi"><span>חודש שעבר</span><b>${ILS(Math.round(lastM.sum))}</b></div>
+    </div>
+    <div class="card pad"><h3>הוצאה חודשית</h3>${chart}${Object.values(byMonth).some(m => m.est) ? '<div class="muted small">חלק מהסכומים משוערים לפי מחירי המוצרים, כי לא נרשם סכום מהקופה.</div>' : ''}</div>
+    <div class="card pad"><h3>מי קנה</h3>${whoHtml}</div>
+    ${top.length ? `<div class="card pad"><h3>הכי נקנה</h3>${topHtml}</div>` : ''}
+    ${changes.length ? `<div class="card pad"><h3>שינויי מחירים</h3>${chHtml}</div>` : ''}
+    <div class="card pad"><h3>קניות אחרונות</h3><div class="muted small">לחיצה על קנייה מוסיפה או מתקנת את הסכום מהקופה</div>${recent}</div>
+  </div>`;
+}
+
 /* ---------------- thanks ---------------- */
 function showThanks(t) {
   if (S.shownThanks.has(t.id)) return;
@@ -878,6 +1020,7 @@ function showThanks(t) {
       <div><b>${t.bought_count ?? 0}</b><span>פריטים נקנו</span></div>
       <div><b>${t.left_count ?? 0}</b><span>נשארו לפעם הבאה</span></div>
       ${mins ? `<div><b>${mins}′</b><span>זמן בסופר</span></div>` : ''}
+      ${t.actual_total || t.estimated_total ? `<div><b>${ILS(t.actual_total || t.estimated_total)}</b><span>${t.actual_total ? 'בקופה' : 'משוער'}</span></div>` : ''}
     </div>
     <div class="acts">
       ${mine ? '' : `<button class="btn heart" data-th="heart">${I.heart} לשלוח לב ל${esc(nameOf(t.shopper_id))}</button>`}
@@ -943,12 +1086,13 @@ document.addEventListener('click', async e => {
     case 'quick': addItem(b.dataset.name); break;
     case 'start': startTrip(); break;
     case 'confirm': openConfirm(false); break;
-    case 'finish': finishTrip(); break;
     case 'snooze': snoozeTrip(10); break;
     case 'cancel': cancelTrip(); break;
     case 'cancel-ask': openSheet(`<h2>לבטל את היציאה?</h2><div class="lead">הסימונים בעגלה יתאפסו, והרשימה תישאר כמו שהיא.</div>
       <div class="row2"><button class="btn ghost" data-act="backdrop-close">לא, ממשיכים</button><button class="btn orange" data-act="cancel" style="height:54px;font-size:16px">כן, לבטל</button></div>`); break;
     case 'item-more': openItemMore(b.dataset.id); break;
+    case 'price': openPrice(b.dataset.id); break;
+    case 'trip-total': openTripTotal(b.dataset.id); break;
     case 'oos': {
       const it = S.items.find(i => i.id === b.dataset.id); if (!it) break;
       closeSheet(); updateItem(it.id, { status: 'oos', status_note: '', in_cart: false });
@@ -981,7 +1125,7 @@ document.addEventListener('click', async e => {
       S.household.category_order = order; saveCache(); closeSheet(); render(); toast('סדר המחלקות נשמר');
       break;
     }
-    case 'tab': S.tab = b.dataset.tab; render(); break;
+    case 'tab': S.tab = b.dataset.tab; render(); if (S.tab === 'stats') loadStats(); window.scrollTo(0, 0); break;
     case 'settings': openSettings(); break;
     case 'share-code': {
       const txt = `הצטרפי אליי לרשימת הקניות שלנו ב"בדרך לסופר" 🛒\nקוד הבית: ${S.household.invite_code}\n${location.origin + location.pathname}`;
@@ -1029,7 +1173,29 @@ document.addEventListener('submit', async e => {
     case 'edit': {
       const name = fd.name.trim(); if (!name) return;
       updateItem(f.dataset.id, { name, qty: fd.qty.trim() || '1', note: fd.note.trim(), category: guessCategory(name) });
+      const pr = parsePrice(fd.price); if (pr != null) setPrice(name, pr);
       closeSheet();
+      break;
+    }
+    case 'finish': {
+      for (const [k, v] of Object.entries(fd)) if (k.startsWith('p_')) {
+        const it = S.items.find(i => i.id === k.slice(2)); const pr = parsePrice(v);
+        if (it && pr != null) await setPrice(it.name, pr);
+      }
+      finishTrip(parsePrice(fd.total));
+      break;
+    }
+    case 'price': {
+      const it = S.items.find(i => i.id === f.dataset.id); const pr = parsePrice(fd.price);
+      closeSheet();
+      if (it && pr != null) { setPrice(it.name, pr); vibrate(10); }
+      break;
+    }
+    case 'trip-total': {
+      const pr = parsePrice(fd.total);
+      closeSheet();
+      const { data, error } = await sb.rpc('set_trip_total', { p_trip: f.dataset.id, p_total: pr ?? 0 });
+      if (error) toast('לא הצלחתי לשמור'); else { toast('הסכום נשמר'); loadStats(); }
       break;
     }
     case 'custom-add': {
