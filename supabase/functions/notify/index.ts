@@ -38,7 +38,8 @@ async function userFromRequest(req: Request) {
   return await r.json();
 }
 
-type Payload = { title: string; body: string; tag?: string; url?: string; requireInteraction?: boolean; kind?: string };
+type Payload = { title: string; body: string; tag?: string; url?: string; requireInteraction?: boolean; kind?: string; icon?: string; badge?: string };
+const ILS = (n: number) => '₪' + (Math.round(n * 100) / 100).toLocaleString('he-IL', { maximumFractionDigits: 2 });
 
 async function pushTo(userIds: string[], payload: Payload) {
   if (!userIds.length) { console.log(JSON.stringify({ kind: payload.kind, users: 0 })); return { sent: 0 }; }
@@ -74,10 +75,45 @@ async function reminders() {
     const mins = Math.max(1, Math.round((Date.now() - new Date(t.started_at).getTime()) / 60000));
     await pushTo([t.shopper_id], {
       title: '⏰ סיימת לקנות?', body: `עברו ${mins} דקות מאז שיצאת לסופר. לחיצה לאישור הקנייה`,
-      tag: 'remind-' + t.id, url: APP_URL + '?confirm=1', requireInteraction: true, kind: 'remind'
+      tag: 'remind-' + t.id, url: APP_URL + '?confirm=1', requireInteraction: true, kind: 'remind', badge: 'badge-clock.png', icon: 'notif-trip.png'
     });
   }
   return { reminded: due.length };
+}
+
+// trips and messages: called by the database trigger (public.notify_event), not by the phones
+async function serverEvent(type: string, id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { sent: 0 };
+  if (type.startsWith('trip_')) {
+    const [t] = await sql`select t.*, m.display_name from public.trips t
+      join public.members m on m.user_id = t.shopper_id and m.household_id = t.household_id where t.id = ${id}`;
+    if (!t) return { sent: 0 };
+    const to = await othersInHousehold(t.household_id, t.shopper_id);
+    const name = t.display_name as string;
+    if (type === 'trip_start') return pushTo(to, {
+      title: `🟠 ${name} בדרך לסופר`, body: 'עכשיו הזמן להוסיף מה שחסר · ההתראה תתחלף כשהקנייה תסתיים',
+      tag: 'trip-' + id, url: APP_URL, kind: 'trip', requireInteraction: true, icon: 'notif-trip.png', badge: 'badge-cart.png' });
+    if (type === 'trip_done') {
+      const total = t.actual_total ?? t.estimated_total;
+      return pushTo(to, {
+        title: `🎉 תודה ל${name}, אין עלייך!!!`,
+        body: `נקנו ${t.bought_count ?? 0} פריטים` + (total ? ` · ${t.actual_total ? '' : 'כ־'}${ILS(Number(total))}` : '') + (t.left_count ? ` · ${t.left_count} נשארו לפעם הבאה` : ''),
+        tag: 'trip-' + id, url: APP_URL + '?thanks=' + id, kind: 'thanks', badge: 'badge-check.png' });
+    }
+    if (type === 'trip_cancel') return pushTo(to, {
+      title: `היציאה לסופר של ${name} בוטלה`, body: 'הרשימה נשארה כמו שהיא', tag: 'trip-' + id, url: APP_URL, kind: 'trip', badge: 'badge-cart.png' });
+  }
+  if (type === 'message') {
+    const [m] = await sql`select msg.*, mem.display_name from public.messages msg
+      join public.members mem on mem.user_id = msg.sender_id and mem.household_id = msg.household_id where msg.id = ${id}`;
+    if (!m) return { sent: 0 };
+    const text = m.kind === 'oos' ? `אין ${m.item_name} במלאי` + (m.body ? ` · ${m.body}` : '')
+      : m.kind === 'sub' ? `במקום ${m.item_name} לקחתי ${m.body}`
+      : m.kind === 'ask' ? `לגבי ${m.item_name}: ${m.body}` : m.body;
+    return pushTo(await othersInHousehold(m.household_id, m.sender_id), {
+      title: `💬 ${m.display_name}`, body: text, tag: 'msg', url: APP_URL + '?chat=1', kind: 'message', badge: 'badge-chat.png' });
+  }
+  return { sent: 0 };
 }
 
 Deno.serve(async (req) => {
@@ -88,6 +124,12 @@ Deno.serve(async (req) => {
     const action = body.action || url.searchParams.get('action');
 
     if (action === 'vapid') return json({ publicKey: (await vapid()).publicKey });
+
+    if (action === 'event') {
+      const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
+      if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
+      return json(await serverEvent(String(body.type || ''), String(body.id || '')));
+    }
 
     if (action === 'reminders') {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
@@ -111,44 +153,13 @@ Deno.serve(async (req) => {
         const list = items.map((i) => i.name + (i.qty && i.qty !== '1' ? ` ×${i.qty}` : ''));
         const shown = list.slice(0, 6).join(', ') + (list.length > 6 ? ` ועוד ${list.length - 6}` : '');
         return json(await pushTo(await othersInHousehold(hid, user.id), {
-          title: `🛒 נוסף לרשימה (${name})`, body: shown, tag: 'items', url: APP_URL, kind: 'items'
+          title: `🛒 נוסף לרשימה (${name})`, body: shown, tag: 'items', url: APP_URL, kind: 'items', badge: 'badge-plus.png'
         }));
       }
-      case 'trip_start': {
-        const [t] = await sql`select id from public.trips where household_id = ${hid} and status = 'active' and shopper_id = ${user.id}`;
-        if (!t) return json({ sent: 0 });
-        return json(await pushTo(await othersInHousehold(hid, user.id), {
-          title: `🟠 ${name} בדרך לסופר`, body: 'עכשיו הזמן להוסיף מה שחסר', tag: 'trip-' + t.id, url: APP_URL, kind: 'trip'
-        }));
-      }
-      case 'trip_done': {
-        const [t] = await sql`select id, bought_count, left_count from public.trips where id = ${body.trip ?? null} and household_id = ${hid} and shopper_id = ${user.id} and status = 'done'`;
-        if (!t) return json({ sent: 0 });
-        return json(await pushTo(await othersInHousehold(hid, user.id), {
-          title: `🎉 תודה ל${name}, אין עלייך!!!`,
-          body: `נקנו ${t.bought_count ?? 0} פריטים` + (t.left_count ? ` · ${t.left_count} נשארו לפעם הבאה` : ''),
-          tag: 'trip-' + t.id, url: APP_URL + '?thanks=' + t.id, kind: 'thanks'
-        }));
-      }
-      case 'trip_cancel': {
-        const [t] = await sql`select id from public.trips where id = ${body.trip ?? null} and household_id = ${hid} and status = 'cancelled'`;
-        if (!t) return json({ sent: 0 });
-        return json(await pushTo(await othersInHousehold(hid, user.id), {
-          title: `היציאה לסופר של ${name} בוטלה`, body: 'הרשימה נשארה כמו שהיא', tag: 'trip-' + t.id, url: APP_URL, kind: 'trip'
-        }));
-      }
-      case 'message': {
-        const [m] = await sql`select kind, body, item_name from public.messages where id = ${body.id ?? null} and household_id = ${hid} and sender_id = ${user.id}`;
-        if (!m) return json({ sent: 0 });
-        const text = m.kind === 'oos' ? `אין ${m.item_name} במלאי` + (m.body ? ` · ${m.body}` : '')
-          : m.kind === 'sub' ? `במקום ${m.item_name} לקחתי ${m.body}`
-          : m.kind === 'ask' ? `לגבי ${m.item_name}: ${m.body}` : m.body;
-        return json(await pushTo(await othersInHousehold(hid, user.id), {
-          title: `💬 ${name}`, body: text, tag: 'msg', url: APP_URL + '?chat=1', kind: 'message'
-        }));
-      }
+      case 'trip_start': case 'trip_done': case 'trip_cancel': case 'message':
+        return json({ sent: 0, via: 'server' });
       case 'test':
-        return json(await pushTo([user.id], { title: '🔔 התראת בדיקה', body: 'מעולה, ההתראות עובדות במכשיר הזה', tag: 'test', url: APP_URL, kind: 'test' }));
+        return json(await pushTo([user.id], { title: '🔔 התראת בדיקה', body: 'מעולה, ההתראות עובדות במכשיר הזה', tag: 'test', url: APP_URL, kind: 'test', badge: 'badge-check.png' }));
       default:
         return json({ error: 'unknown action' }, 400);
     }

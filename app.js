@@ -439,7 +439,6 @@ async function sendMessage({ kind = 'text', body = '', item = null }) {
   }
   const m = S.messages.find(x => x.id === row.id); if (m) delete m._pending;
   saveCache(); refreshChat();
-  notify('message', { id: row.id });
   return true;
 }
 function markRead() {
@@ -544,13 +543,13 @@ function resetCartLocally() {
 async function startTrip() {
   await flush();
   const t = await rpc('start_trip', { p_household: S.household.id, p_minutes: 15 });
-  if (t) { S.trip = t; resetCartLocally(); vibrate(60); saveCache(); render(); notify('trip_start'); }
+  if (t) { S.trip = t; resetCartLocally(); vibrate(60); saveCache(); render(); }
 }
 async function finishTrip(total = null) {
   closeSheet();
   await flush();
   const t = await rpc('finish_trip', { p_trip: S.trip.id, p_total: total });
-  if (t) { S.items = S.items.filter(i => !(i.list === 'super' && i.in_cart)); S.trip = null; saveCache(); showThanks(t); render(); notify('trip_done', { trip: t.id }); }
+  if (t) { S.items = S.items.filter(i => !(i.list === 'super' && i.in_cart)); S.trip = null; saveCache(); showThanks(t); render(); }
 }
 async function snoozeTrip(min) {
   closeSheet();
@@ -560,7 +559,7 @@ async function snoozeTrip(min) {
 async function cancelTrip() {
   closeSheet();
   const t = await rpc('cancel_trip', { p_trip: S.trip.id });
-  if (t) { S.trip = null; resetCartLocally(); saveCache(); render(); notify('trip_cancel', { trip: t.id }); }
+  if (t) { S.trip = null; resetCartLocally(); saveCache(); render(); }
 }
 
 /* ---------------- render ---------------- */
