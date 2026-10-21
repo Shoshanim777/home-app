@@ -45,7 +45,7 @@ const CAT_ICON = { 'ירקות ופירות': '🥕', 'מקרר': '🥛', 'מא�
 
 /* built-in product catalog for "בחירה מרשימה" */
 const CATALOG = [
-  { name: 'ירקות ופירות', items: [['🍅','עגבניות'],['🥒','מלפפונים'],['🧅','בצל'],['🧄','שום'],['🥕','גזר'],['🫑','פלפל'],['🌶️','פלפל ירוק חריף'],['🥬','חסה'],['🥔','תפוחי אדמה'],['🍠','בטטה'],['🥑','אבוקדו'],['🍆','חציל'],['🥦','ברוקולי'],['🍄','פטריות'],['🌿','פטרוזיליה'],['🌿','כוסברה'],['🌿','שמיר'],['🍋','לימון'],['🍌','בננות'],['🍎','תפוחים'],['🍊','תפוזים'],['🍐','אגסים'],['🍇','ענבים'],['🍓','תותים'],['🍉','אבטיח'],['🥭','מנגו']] },
+  { name: 'ירקות ופירות', items: [['🍅','עגבניות'],['🥒','מלפפונים'],['🧅','בצל'],['🧄','שום'],['🥕','גזר'],['🫑','פלפל'],['🌶️','פלפל ירוק חריף'],['🥬','חסה'],['🥔','תפוחי אדמה'],['🍠','בטטה'],['🥑','אבוקדו'],['🍆','חציל'],['🥦','ברוקולי'],['🍄','פטריות'],['🌿','פטרוזיליה'],['🌿','כוסברה'],['🌿','שמיר'],['🍋','לימון'],['🍌','בננות'],['🍎','תפוחים'],['🍊','תפוזים'],['🍐','אגסים'],['🍇','ענבים'],['🍓','תותים'],['🍒','דובדבנים'],['🍉','אבטיח'],['🥭','מנגו']] },
   { name: 'מקרר', items: [['🥛','חלב'],['🥚','ביצים'],['🧀','גבינה צהובה'],['🧀','גבינה לבנה'],['🧀','גבינת פטה'],['🧀','גבינת קשקבל'],['🥣','קוטג׳'],['🍶','יוגורט'],['🧈','חמאה'],['🥛','שמנת מתוקה'],['🍶','שמנת חמוצה'],['🍮','מעדנים'],['🧀','לבנה'],['🧀','בולגרית'],['🥛','שוקו']] },
   { name: 'מאפים', items: [['🍞','לחם'],['🍞','לחם מחמצת'],['🫓','פיתות'],['🥖','באגט'],['🍞','לחמניות'],['🥯','בייגל'],['🥐','קרואסונים'],['🫓','טורטיות'],['🍞','חלה'],['🍰','עוגה']] },
   { name: 'בשר ודגים', items: [['🍗','חזה עוף'],['🍗','חזה עוף לשניצל'],['🍗','שניצל'],['🍗','כרעיים (פולקה)'],['🍗','פרגיות'],['🥩','בשר טחון'],['🥩','סטייק'],['🍔','המבורגרים'],['🌭','נקניקיות'],['🐟','סלמון'],['🐟','פילה דג'],['🥓','פסטרמה']] },
@@ -156,13 +156,26 @@ function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch {
 
 /* ---------------- push notifications ---------------- */
 const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+async function notifyOnce(action, extra) {
+  const { data } = await sb.auth.getSession();
+  const tok = data.session?.access_token; if (!tok) throw new Error('no session');
+  const r = await fetch(FN_URL, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + tok }, body: JSON.stringify({ action, ...extra }) });
+  if (!r.ok && r.status >= 500) throw new Error('notify ' + r.status);
+  return await r.json().catch(() => ({}));
+}
 async function notify(action, extra = {}) {
-  try {
-    const { data } = await sb.auth.getSession();
-    const tok = data.session?.access_token; if (!tok) return null;
-    const r = await fetch(FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: 'Bearer ' + tok }, body: JSON.stringify({ action, ...extra }) });
-    return await r.json().catch(() => null);
-  } catch { return null; }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return await notifyOnce(action, extra); }
+    catch (e) { console.warn('notify failed', action, e); await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); }
+  }
+  // still failing (no reception): keep it and send when the connection comes back
+  if (action !== 'test') { const q = LS.get('ha_pending_notify', []); q.push({ action, extra, at: Date.now() }); LS.set('ha_pending_notify', q.slice(-20)); }
+  return null;
+}
+async function flushPendingNotify() {
+  const q = LS.get('ha_pending_notify', []); if (!q.length) return;
+  LS.set('ha_pending_notify', []);
+  for (const n of q) if (Date.now() - n.at < 3 * 3600e3) { try { await notifyOnce(n.action, n.extra); } catch { } }
 }
 // items added within a few seconds go out as one notification
 let notifyIds = new Set(), notifyTimer = null;
@@ -244,9 +257,12 @@ function mergePending(serverItems) {
   return [...map.values()];
 }
 
-function subscribe() {
+let rtHealthy = false, rtRetry = null;
+function subscribe(force = false) {
   if (!S.household) return;
+  if (channel && rtHealthy && !force && channel.__hid === S.household.id) return;
   if (channel) { sb.removeChannel(channel); channel = null; }
+  rtHealthy = false;
   const hid = S.household.id;
   const f = 'household_id=eq.' + hid;
   channel = sb.channel('hh-' + hid, { config: { broadcast: { self: false } } })
@@ -265,7 +281,14 @@ function subscribe() {
     .on('broadcast', { event: 'heart' }, ({ payload }) => {
       if (payload?.to === S.user.id) { vibrate([60, 40, 60]); toast(nameOf(payload.from) + ' שלח/ה לך לב ❤'); }
     })
-    .subscribe();
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') { const was = rtHealthy; rtHealthy = true; if (was === false && S.household) refreshLive(); }
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        rtHealthy = false; clearTimeout(rtRetry);
+        rtRetry = setTimeout(() => { if (S.user && S.household && navigator.onLine) subscribe(true); }, 3000);
+      }
+    });
+  channel.__hid = hid;
 }
 
 function onItem({ eventType, new: n, old: o }) {
@@ -287,7 +310,7 @@ function onTrip({ eventType, new: n }) {
   if (n.status === 'active') {
     const was = S.trip;
     S.trip = n;
-    if (!was && n.shopper_id !== S.user.id) { vibrate(80); toast(nameOf(n.shopper_id) + ' בדרך לסופר!'); }
+    if (!was && n.shopper_id !== S.user.id) { vibrate([80, 60, 80]); showTripBanner(n); }
   } else {
     if (S.trip && S.trip.id === n.id) S.trip = null;
     if (n.status === 'done') showThanks(n);
@@ -433,6 +456,70 @@ function showBanner(m) {
     <span class="reply">תשובה</span>`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 8000);
+}
+
+function showInfoBanner({ title, body, avatarOf, persistent = false, act = '' }) {
+  document.getElementById('banner')?.remove();
+  const el = document.createElement('div');
+  el.id = 'banner'; el.className = 'banner-top info';
+  el.innerHTML = `${avatarOf ? `<span class="av" style="background:${colorOf(avatarOf)}">${esc(initial(avatarOf))}</span>` : ''}
+    <button class="bt" ${act ? `data-act="${act}"` : 'data-act="banner-close"'}><b>${esc(title)}</b>${body ? `<span>${esc(body)}</span>` : ''}</button>
+    <button class="b-x" data-act="banner-close" aria-label="סגירה">${I.x}</button>`;
+  document.body.appendChild(el);
+  if (!persistent) setTimeout(() => el.remove(), 8000);
+}
+function showTripBanner(t) {
+  showInfoBanner({ title: `🟠 ${nameOf(t.shopper_id)} בדרך לסופר`, body: 'עכשיו הזמן להוסיף מה שחסר', avatarOf: t.shopper_id, persistent: true });
+}
+
+/* the shopper's "done shopping?" prompt opens by itself only once per reminder time, even across reloads */
+function maybePromptConfirm() {
+  if (!iShop()) return;
+  const key = S.trip.id + '|' + S.trip.remind_at;
+  if (Date.now() < new Date(S.trip.remind_at).getTime()) return;
+  if (LS.get('ha_prompted', '') === key) return;
+  LS.set('ha_prompted', key);
+  if (!sheetRoot.innerHTML) { vibrate([100, 60, 100]); openConfirm(true); }
+}
+const reminderDue = () => iShop() && Date.now() >= new Date(S.trip.remind_at).getTime();
+
+/* a push arrived while the app is on screen: the live connection may have dropped, so reload and show it */
+async function onForegroundPush(p) {
+  await refreshLive(true);
+  if (p.kind === 'remind') { maybePromptConfirm(); return; }
+  if (p.kind === 'trip' && S.trip && S.trip.shopper_id !== S.user.id) { showTripBanner(S.trip); return; }
+  if (p.kind === 'thanks' || p.kind === 'test') { if (p.kind === 'test') toast(p.title + ' · ' + p.body); return; }
+  if (p.title) { vibrate(80); showInfoBanner({ title: p.title, body: p.body, act: p.kind === 'message' ? 'chat' : '' }); }
+}
+
+/* light refresh of the live parts (items, trip, messages) without resubscribing */
+let refreshing = false;
+async function refreshLive(quiet = false) {
+  if (refreshing || !S.household || !S.user || !navigator.onLine) return;
+  refreshing = true;
+  try {
+    const hid = S.household.id;
+    const since = new Date(Date.now() - 48 * 3600e3).toISOString();
+    const [it, tr, ms] = await Promise.all([
+      sb.from('items').select('*').eq('household_id', hid).order('created_at'),
+      sb.from('trips').select('*').eq('household_id', hid).eq('status', 'active').maybeSingle(),
+      sb.from('messages').select('*').eq('household_id', hid).gte('created_at', since).order('created_at').limit(200)
+    ]);
+    if (it.error || tr.error || ms.error) return;
+    const before = new Set(S.items.map(i => i.id));
+    S.items = mergePending(it.data);
+    const fresh = S.items.filter(i => !before.has(i.id) && i.added_by !== S.user.id);
+    if (fresh.length && iShop() && !quiet) { vibrate(120); toast(nameOf(fresh[0].added_by) + ' הוסיפ/ה: ' + fresh.map(i => i.name).join(', ')); }
+    const hadTrip = S.trip;
+    S.trip = tr.data || null;
+    if (!hadTrip && S.trip && S.trip.shopper_id !== S.user.id) showTripBanner(S.trip);
+    const knownMsg = new Set(S.messages.map(m => m.id));
+    const pending = S.messages.filter(m => m._pending);
+    S.messages = [...ms.data, ...pending.filter(p => !ms.data.some(x => x.id === p.id))];
+    const newMsg = ms.data.filter(m => !knownMsg.has(m.id) && m.sender_id !== S.user.id);
+    if (newMsg.length && S.sheetKind !== 'chat' && !quiet) showBanner(newMsg[newMsg.length - 1]);
+    saveCache(); refreshChat(); render();
+  } finally { refreshing = false; }
 }
 
 /* ---------------- trips ---------------- */
@@ -608,7 +695,7 @@ function renderMain() {
         <div class="lamp on">${I.bulb}</div>
         <div class="t1">את/ה בדרך לסופר</div>
         <div class="t2">${minsSince(trip.started_at)} דק׳ · ${inCart} מתוך ${items.length} בעגלה${cartB.known ? ' · בעגלה כ־' + ILS(cartB.sum) : ''}</div>
-        <div class="t3">חסר משהו? ⋯ ליד המוצר: "לא היה", "לקחתי משהו אחר" או שאלה</div>
+        ${reminderDue() ? `<button class="due" data-act="confirm">⏰ עברו ${minsSince(trip.started_at)} דק׳ · לסיים את הקנייה?</button>` : `<div class="t3">חסר משהו? ⋯ ליד המוצר: "לא היה", "לקחתי משהו אחר" או שאלה</div>`}
       </div>`;
     } else if (trip) {
       status = `<div class="status">
@@ -837,7 +924,7 @@ function openConfirm(fromTimer) {
       <button class="btn green" type="submit">סיימתי, אפשר לסגור</button>
     </form>
     <div class="row2">
-      <button class="btn soft" data-act="snooze">עוד 10 דקות</button>
+      <button class="btn soft" data-act="snooze">עדיין בסופר · עוד 10 דק׳</button>
       <button class="btn ghost" data-act="cancel">לא יצא, ביטלתי</button>
     </div>`, 'tall scroll', 'confirm');
 }
@@ -1100,6 +1187,7 @@ document.addEventListener('click', async e => {
       break;
     }
     case 'chat': document.getElementById('banner')?.remove(); openChat(); break;
+    case 'banner-close': document.getElementById('banner')?.remove(); break;
     case 'msg-quick': sendMessage({ body: b.dataset.text }); break;
     case 'push-enable': enablePush(); break;
     case 'push-dismiss': S.pushDismissed = true; LS.set('ha_push_dismissed', true); render(); break;
@@ -1236,10 +1324,10 @@ function hebAuthErr(e) {
 
 /* ---------------- deep links from notifications ---------------- */
 let pendingOpen = new URLSearchParams(location.search);
-if ([...pendingOpen.keys()].length) history.replaceState(null, '', location.pathname);
+if ([...pendingOpen.keys()].length) history.replaceState(null, '', location.pathname); else pendingOpen = null;
 async function handleOpen(params) {
   if (!params || !S.household) return;
-  if (params.get('confirm') && iShop()) openConfirm(true);
+  if (params.get('confirm') && iShop()) { LS.set('ha_prompted', S.trip.id + '|' + S.trip.remind_at); openConfirm(true); }
   else if (params.get('chat')) openChat();
   else if (params.get('thanks')) {
     const { data } = await sb.from('trips').select('*').eq('id', params.get('thanks')).maybeSingle();
@@ -1249,7 +1337,7 @@ async function handleOpen(params) {
 navigator.serviceWorker?.addEventListener('message', e => {
   const d = e.data || {};
   if (d.type === 'open' && d.url) handleOpen(new URL(d.url).searchParams);
-  if (d.type === 'push' && d.payload?.kind === 'remind' && iShop()) openConfirm(true);
+  if (d.type === 'push') onForegroundPush(d.payload || {});
 });
 
 /* ---------------- lifecycle ---------------- */
@@ -1264,26 +1352,26 @@ sb.auth.onAuthStateChange((evt, session) => {
   if (!S.user) { if (channel) { sb.removeChannel(channel); channel = null; } S.household = null; S.booting = false; render(); return; }
   if (prevUser !== S.user.id) {
     loadCache(); S.booting = false; render();
-    safeLoad().then(() => { flush(); ensurePush(); if (pendingOpen) { handleOpen(pendingOpen); pendingOpen = null; } });
+    safeLoad().then(() => { flush(); ensurePush(); flushPendingNotify(); if (pendingOpen) { handleOpen(pendingOpen); pendingOpen = null; } else maybePromptConfirm(); });
   }
 });
 
-window.addEventListener('online', () => { S.online = true; render(); flush(); safeLoad(); });
+window.addEventListener('online', () => { S.online = true; render(); flush(); safeLoad(); flushPendingNotify(); if (!rtHealthy) subscribe(true); });
 window.addEventListener('offline', () => { S.online = false; render(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.user) { clearNotifications(); safeLoad().then(flush); }
+  if (document.visibilityState === 'visible' && S.user) { clearNotifications(); safeLoad().then(() => { flush(); flushPendingNotify(); maybePromptConfirm(); }); }
 });
 
 // reminder: when the shopper's 15 minutes are up, ask to confirm the purchase
 setInterval(() => {
-  if (iShop()) {
-    const key = S.trip.id + S.trip.remind_at;
-    if (Date.now() >= new Date(S.trip.remind_at).getTime() && S.confirmFor !== key) {
-      S.confirmFor = key; vibrate([100, 60, 100]); openConfirm(true);
-    }
-  }
+  if (iShop()) maybePromptConfirm();
   if (S.trip && !sheetRoot.innerHTML && !S.removing.size && document.activeElement?.id !== 'add-input') render(); // keep the minutes counter fresh
 }, 15000);
+
+setInterval(() => {
+  if (S.trip && document.visibilityState === 'visible') refreshLive();
+  else if (document.visibilityState === 'visible' && !rtHealthy) refreshLive(true);
+}, 20000);
 
 setTimeout(() => { if (S.booting) { S.booting = false; render(); } }, 2500);
 

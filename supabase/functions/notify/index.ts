@@ -41,7 +41,7 @@ async function userFromRequest(req: Request) {
 type Payload = { title: string; body: string; tag?: string; url?: string; requireInteraction?: boolean; kind?: string };
 
 async function pushTo(userIds: string[], payload: Payload) {
-  if (!userIds.length) return { sent: 0 };
+  if (!userIds.length) { console.log(JSON.stringify({ kind: payload.kind, users: 0 })); return { sent: 0 }; }
   await vapid();
   const subs = await sql`select endpoint, p256dh, auth from public.push_subscriptions where user_id in ${sql(userIds)}`;
   let sent = 0;
@@ -56,6 +56,7 @@ async function pushTo(userIds: string[], payload: Payload) {
       else console.error('push failed', code, (e as Error).message);
     }
   }));
+  console.log(JSON.stringify({ kind: payload.kind, tag: payload.tag, users: userIds.length, devices: subs.length, sent }));
   return { sent, devices: subs.length };
 }
 
