@@ -116,6 +116,42 @@ async function serverEvent(type: string, id: string) {
   return { sent: 0 };
 }
 
+// ---- owner alerts (no list / message content, only that someone uses the app) ----
+async function adminUser() {
+  const [row] = await sql`select value from public.app_secrets where name = 'admin_user'`;
+  return row?.value as string | undefined;
+}
+async function memberJoin(hid: string, uid: string) {
+  const UUID = /^[0-9a-f-]{36}$/i;
+  if (!UUID.test(hid) || !UUID.test(uid)) return { sent: 0 };
+  const admin = await adminUser(); if (!admin || admin === uid) return { sent: 0 };
+  const [mine] = await sql`select household_id from public.members where user_id = ${admin} limit 1`;
+  if (mine && mine.household_id === hid) return { sent: 0 };            // our own home: no need
+  const [h] = await sql`select h.name, (select count(*) from public.members where household_id = h.id)::int n,
+      (select display_name from public.members where household_id = h.id and user_id = ${uid}) who
+    from public.households h where h.id = ${hid}`;
+  if (!h) return { sent: 0 };
+  if (h.n <= 1) return pushTo([admin], { title: '🏠 בית חדש נפתח באפליקציה', body: `${h.who} פתח/ה את "${h.name}"`, tag: 'admin-' + hid, kind: 'admin', badge: 'badge-plus.png', url: APP_URL });
+  return pushTo([admin], { title: `👋 ${h.who} הצטרף/ה לבית "${h.name}"`, body: `עכשיו יש בבית ${h.n} משתמשים`, tag: 'admin-' + hid, kind: 'admin', badge: 'badge-plus.png', url: APP_URL });
+}
+async function weekly() {
+  const admin = await adminUser(); if (!admin) return { sent: 0 };
+  const [mine] = await sql`select household_id from public.members where user_id = ${admin} limit 1`;
+  const ex = mine?.household_id ?? '00000000-0000-0000-0000-000000000000';
+  const [s] = await sql`select
+      (select count(*) from public.households where id <> ${ex})::int total,
+      (select count(distinct household_id) from (
+          select household_id from public.items where created_at > now() - interval '7 days'
+          union all select household_id from public.trips where started_at > now() - interval '7 days'
+          union all select household_id from public.purchases where created_at > now() - interval '7 days') x
+        where household_id <> ${ex})::int active,
+      (select count(*) from public.trips where status = 'done' and finished_at > now() - interval '7 days' and household_id <> ${ex})::int trips,
+      (select count(*) from public.members where joined_at > now() - interval '7 days' and household_id <> ${ex})::int joined`;
+  if (!s.total) { console.log(JSON.stringify({ kind: 'weekly', skipped: 'no other homes' })); return { sent: 0 }; }
+  const body = `${s.active} בתים פעילים מתוך ${s.total} · ${s.trips} קניות` + (s.joined ? ` · ${s.joined} משתמשים חדשים` : '') + ' (לא כולל הבית שלכם)';
+  return pushTo([admin], { title: '📊 השבוע ב"בדרך לסופר"', body, tag: 'weekly', kind: 'admin', badge: 'badge-check.png', url: APP_URL });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
@@ -128,7 +164,14 @@ Deno.serve(async (req) => {
     if (action === 'event') {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
       if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
+      if (body.type === 'member_join') return json(await memberJoin(String(body.hid || ''), String(body.uid || '')));
       return json(await serverEvent(String(body.type || ''), String(body.id || '')));
+    }
+
+    if (action === 'weekly') {
+      const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
+      if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
+      return json(await weekly());
     }
 
     if (action === 'reminders') {
