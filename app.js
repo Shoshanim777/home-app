@@ -1041,6 +1041,7 @@ function settingsHtml() {
       <div class="field" style="flex:1"><label for="mn">השם שלי</label><input id="mn" name="display" value="${esc(m?.display_name || '')}" maxlength="20" required></div>
       <button class="btn violet" type="submit" style="flex:0 0 100px;height:52px;font-size:16px">עדכון</button>
     </form>
+    <a class="btn ghost" href="guide.html" style="text-decoration:none;display:flex;align-items:center;justify-content:center">📖 מדריך שימוש</a>
     <div style="font-size:13px;color:var(--muted)">מחובר/ת בתור ${esc(S.user.email)}</div>
     <button class="danger" data-act="signout">יציאה מהמשתמש</button>`;
 }

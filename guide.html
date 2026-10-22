@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F2FB">
+<title>מדריך · בדרך לסופר</title>
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#17162B; --muted:#5E5C78; --ground:#F3F2FB; --card:#fff; --line:#ECEAF4;
+  --accent:#5B3DF5; --accent-soft:#EFEDFF; --orange:#FF7A1A; --orange-soft:#FFE9D6;
+  --green:#12B76A; --green-soft:#DDF7EA; --pink:#FF5C8A;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:'Rubik',system-ui,sans-serif;background:var(--ground);color:var(--ink);line-height:1.6;font-size:16px}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px 56px}
+header{padding:28px 0 8px;display:flex;align-items:center;gap:14px}
+header img{width:64px;height:64px;border-radius:18px;box-shadow:0 6px 18px rgba(91,61,245,.18)}
+h1{font-size:26px;margin:0;font-weight:800;line-height:1.2}
+.sub{color:var(--muted);margin:2px 0 0;font-size:15px}
+.intro{background:var(--card);border-radius:20px;padding:16px 18px;margin:16px 0}
+.intro p{margin:0}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+nav.toc a{background:var(--card);color:var(--ink);text-decoration:none;border-radius:999px;padding:7px 13px;font-size:14px;font-weight:500;border:1px solid var(--line)}
+section{margin-top:30px;scroll-margin-top:12px}
+h2{font-size:20px;margin:0 0 12px;display:flex;align-items:center;gap:10px;font-weight:700}
+h2 .n{flex:none;width:32px;height:32px;border-radius:10px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:16px}
+section.trip h2 .n{background:var(--orange)}
+section.done h2 .n{background:var(--green)}
+.card{background:var(--card);border-radius:20px;padding:4px 18px}
+.step{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.step:last-child{border-bottom:0}
+.step .e{flex:none;font-size:22px;width:30px;text-align:center;line-height:1.3}
+.step b{display:block;font-weight:600}
+.step p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.ui{display:inline-block;background:var(--accent-soft);color:var(--accent);font-weight:600;border-radius:8px;padding:0 7px;font-size:14px;white-space:nowrap}
+.ui.o{background:var(--orange-soft);color:#A64300}
+.ui.g{background:var(--green-soft);color:#08744A}
+.tip{margin-top:12px;background:var(--accent-soft);border-radius:16px;padding:12px 14px;font-size:15px}
+.tip.o{background:var(--orange-soft)}
+.lamp{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 4px rgba(255,122,26,.25);vertical-align:middle;margin-inline-start:4px}
+.thanks{margin-top:12px;background:linear-gradient(135deg,#12B76A,#0E9F8C);color:#fff;border-radius:18px;padding:16px;text-align:center;font-weight:700;font-size:18px}
+.thanks small{display:block;font-weight:400;font-size:14px;opacity:.9}
+.privacy{margin-top:30px;background:var(--card);border-radius:20px;padding:16px 18px;border:2px dashed var(--line)}
+.privacy h3{margin:0 0 6px;font-size:17px}
+.privacy p{margin:0;color:var(--muted);font-size:15px}
+.cta{display:block;margin:28px 0 0;text-align:center;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;border-radius:16px;padding:15px;font-size:17px}
+footer{text-align:center;color:var(--muted);font-size:13px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon-192.png" alt="">
+    <div><h1>בדרך לסופר</h1><p class="sub">מדריך קצר לכל מה שהאפליקציה יודעת לעשות</p></div>
+  </header>
+
+  <div class="intro"><p>רשימת קניות אחת לכל הבית, שמתעדכנת אצל כולם בזמן אמת. מי שיוצא לסופר מודיע בלחיצה, השאר מקבלים התראה ויכולים להוסיף מה שחסר עד הרגע האחרון, ובסוף כולם אומרים תודה 🎉</p></div>
+
+  <nav class="toc" aria-label="תוכן">
+    <a href="#install">התקנה</a><a href="#home">פתיחת בית</a><a href="#list">הרשימה</a><a href="#trip">בדרך לסופר</a><a href="#at-home">מי שבבית</a><a href="#done">סיום ותודה</a><a href="#more">עוד דברים</a>
+  </nav>
+
+  <section id="install">
+    <h2><span class="n">1</span>התקנה בטלפון</h2>
+    <div class="card">
+      <div class="step"><span class="e">🌐</span><div><b>פותחים את הקישור ב־Chrome</b><p>shoshanim777.github.io/home-app</p></div></div>
+      <div class="step"><span class="e">📲</span><div><b>מוסיפים למסך הבית</b><p>בתפריט <span class="ui">⋮</span> של Chrome בוחרים <span class="ui">התקנת אפליקציה</span> או <span class="ui">הוספה למסך הבית</span>. מעכשיו האפליקציה נפתחת מהאייקון, כמו כל אפליקציה אחרת.</p></div></div>
+      <div class="step"><span class="e">👤</span><div><b>יוצרים משתמש</b><p>אימייל וסיסמה (לפחות 6 תווים) לבחירתכם. אין צורך לאשר מייל.</p></div></div>
+    </div>
+  </section>
+
+  <section id="home">
+    <h2><span class="n">2</span>פתיחת בית וצירוף בן/בת הזוג</h2>
+    <div class="card">
+      <div class="step"><span class="e">🏠</span><div><b>הראשון/ה בבית</b><p>בוחרים <span class="ui">אני הראשון/ה בבית</span>, נותנים שם לבית ולעצמכם.</p></div></div>
+      <div class="step"><span class="e">🔑</span><div><b>שולחים קוד הזמנה</b><p>ב<span class="ui">הגדרות</span> מופיע קוד הבית, ויש כפתור <span class="ui">שליחת הקוד בוואטסאפ</span>.</p></div></div>
+      <div class="step"><span class="e">🤝</span><div><b>השני/ה מצטרף/ת</b><p>מתקינים, יוצרים משתמש, בוחרים <span class="ui">קיבלתי קוד הזמנה</span> ומקלידים את הקוד. זהו, אתם על אותה רשימה.</p></div></div>
+      <div class="step"><span class="e">🔔</span><div><b>מפעילים התראות, בשני הטלפונים</b><p>לוחצים <span class="ui">הפעלת התראות</span> ומאשרים. אפשר לבדוק ב<span class="ui">הגדרות</span> ← <span class="ui">שליחת התראת בדיקה</span>. בלי התראות לא תדעו כשמישהו יוצא לסופר.</p></div></div>
+    </div>
+  </section>
+
+  <section id="list">
+    <h2><span class="n">3</span>רשימת הקניות</h2>
+    <div class="card">
+      <div class="step"><span class="e">⌨️</span><div><b>מקלידים מה חסר</b><p>בשורה <span class="ui">מה חסר?</span> כותבים ושולחים. האפליקציה מזהה את המחלקה ומוסיפה אייקון לבד.</p></div></div>
+      <div class="step"><span class="e">🧺</span><div><b>בחירה מרשימה</b><p>הכפתור <span class="ui">בחירה מרשימה</span> פותח קטלוג לפי מחלקות עם אייקונים. מסמנים כמה מוצרים, קובעים כמות ומוסיפים בבת אחת.</p></div></div>
+      <div class="step"><span class="e">⭐</span><div><b>המוצרים שלנו</b><p>מוצר שאתם קונים הרבה ולא מופיע בקטלוג? שומרים אותו בלשונית <span class="ui">המוצרים שלנו</span>, והוא יחכה שם לשניכם.</p></div></div>
+      <div class="step"><span class="e">➕</span><div><b>כמות</b><p>לחיצה על הכמות (<span class="ui">+1</span>) מוסיפה עוד אחד.</p></div></div>
+      <div class="step"><span class="e">✏️</span><div><b>עריכה</b><p>לחיצה על שם המוצר: שינוי שם, כמות, הערה (מותג, גודל) ומחיר.</p></div></div>
+      <div class="step"><span class="e">✓</span><div><b>מחיקה</b><p>לחיצה על העיגול שליד המוצר. הוא נמחק אחרי 3 שניות, ולחיצה נוספת בזמן הזה מבטלת.</p></div></div>
+    </div>
+  </section>
+
+  <section id="trip" class="trip">
+    <h2><span class="n">4</span>יוצאים לסופר</h2>
+    <div class="card">
+      <div class="step"><span class="e">🛒</span><div><b>לוחצים <span class="ui o">אני בדרך לסופר</span></b><p>המנורה נדלקת בכתום<span class="lamp"></span>, וכל השאר מקבלים התראה.</p></div></div>
+      <div class="step"><span class="e">↕️</span><div><b>הרשימה מסודרת לפי המסלול בסופר</b><p>את סדר המחלקות קובעים פעם אחת ב<span class="ui">הגדרות</span> ← <span class="ui">סדר המחלקות</span>.</p></div></div>
+      <div class="step"><span class="e">☑️</span><div><b>מסמנים כל מוצר שנכנס לעגלה</b><p>בפס העליון רואים כמה כבר בעגלה ומה הסכום המשוער.</p></div></div>
+      <div class="step"><span class="e">₪</span><div><b>מחיר (לא חובה)</b><p>ליד מוצר שבעגלה אפשר להקליד מחיר. הוא יישמר ויופיע בפעם הבאה.</p></div></div>
+      <div class="step"><span class="e">⋯</span><div><b>משהו לא מסתדר עם מוצר?</b><p>בתפריט של המוצר: <span class="ui">לא היה במלאי</span> (נשאר לפעם הבאה), <span class="ui">לקחתי משהו אחר במקום</span>, או <span class="ui">לשאול</span> את מי שבבית. מי שבבית מקבל/ת הודעה מיד.</p></div></div>
+    </div>
+    <div class="tip o">⏰ אחרי כ־15 דקות מגיעה תזכורת <b>"סיימת לקנות?"</b>. עוד לא? בוחרים <span class="ui o">עדיין בסופר</span>, או נודניק מהתפריט <span class="ui o">⋯</span> בפס העליון. שם אפשר גם לבטל את היציאה.</div>
+  </section>
+
+  <section id="at-home">
+    <h2><span class="n">5</span>מי שנשאר/ה בבית</h2>
+    <div class="card">
+      <div class="step"><span class="e">🟠</span><div><b>מקבלים התראה "בדרך לסופר"</b><p>זה הזמן להוסיף מה שנשכח. מוצר שנוסף עכשיו מסומן <span class="ui o">חדש</span> אצל מי שבסופר, ומגיעה לו/ה התראה.</p></div></div>
+      <div class="step"><span class="e">👀</span><div><b>רואים מה כבר בעגלה</b><p>הסימונים מתעדכנים אצלכם בזמן אמת.</p></div></div>
+      <div class="step"><span class="e">💬</span><div><b>הודעות</b><p>עונים לשאלות ושולחים הודעה קצרה בלחיצה (למשל <span class="ui">👍 קיבלתי</span>) או לב ❤.</p></div></div>
+    </div>
+  </section>
+
+  <section id="done" class="done">
+    <h2><span class="n">6</span>סיום הקנייה ותודה</h2>
+    <div class="card">
+      <div class="step"><span class="e">✅</span><div><b>לוחצים <span class="ui g">סיימתי ✓</span></b><p>אפשר להקליד כמה יצא בקופה (לא חובה). מה שסומן בעגלה יורד מהרשימה, ומה שלא נקנה נשאר לפעם הבאה.</p></div></div>
+    </div>
+    <div class="thanks">🎉 תודה לדנה, אין עלייך!!!<small>ההתראה שכל בני הבית מקבלים בסוף</small></div>
+  </section>
+
+  <section id="more">
+    <h2><span class="n">+</span>עוד דברים שימושיים</h2>
+    <div class="card">
+      <div class="step"><span class="e">🧾</span><div><b>הקנייה האחרונה</b><p>בתחתית הרשימה: מה נקנה בפעם הקודמת. <span class="ui">+ לרשימה</span> מחזיר מוצר אחד, ו<span class="ui">להעביר הכול</span> מחזיר את כל הקנייה.</p></div></div>
+      <div class="step"><span class="e">💡</span><div><b>אולי נגמר?</b><p>אחרי כמה קניות האפליקציה מציעה מוצרים שאתם קונים כמעט תמיד ושעוד לא ברשימה. לחיצה מוסיפה.</p></div></div>
+      <div class="step"><span class="e">📊</span><div><b>סטטיסטיקה</b><p>כמה הוצאתם החודש, מי קנה, מה קונים הכי הרבה, שינויי מחירים, ופירוט של כל קנייה.</p></div></div>
+      <div class="step"><span class="e">📶</span><div><b>בלי קליטה בסופר?</b><p>ממשיכים לעבוד כרגיל. השינויים נשמרים ונשלחים כשהקליטה חוזרת.</p></div></div>
+    </div>
+  </section>
+
+  <div class="privacy">
+    <h3>🔒 פרטיות</h3>
+    <p>הרשימות, ההודעות והסכומים גלויים רק לבני הבית שלכם. דותן, שבנה את האפליקציה, מקבל רק הודעה כשבית חדש נפתח או כשמישהו מצטרף, וסיכום שבועי של מספר הבתים והקניות. הוא לא רואה מה כתוב אצלכם.</p>
+  </div>
+
+  <a class="cta" href="./">לפתוח את האפליקציה</a>
+  <footer>בדרך לסופר · שאלות? שלחו לדותן 🙂</footer>
+</div>
+</body>
+</html>
