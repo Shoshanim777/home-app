@@ -67,7 +67,7 @@ const LS = {
 };
 const S = {
   booting: true, session: null, user: null,
-  household: null, members: {}, items: [], trip: null, messages: [], custom: [], prices: {}, stats: null,
+  household: null, members: {}, items: [], trip: null, messages: [], custom: [], prices: {}, stats: null, recent: { trips: [], purchases: [] },
   outbox: LS.get('ha_outbox', []), online: navigator.onLine,
   tab: 'list', authMode: 'login', authErr: '', busy: false,
   addText: '', history: LS.get('ha_history', {}),
@@ -108,11 +108,11 @@ function catOrder() {
 
 function saveCache() {
   if (!S.user) return;
-  LS.set('ha_cache_' + S.user.id, { household: S.household, members: S.members, items: S.items, trip: S.trip, messages: S.messages.slice(-60), custom: S.custom, prices: S.prices });
+  LS.set('ha_cache_' + S.user.id, { household: S.household, members: S.members, items: S.items, trip: S.trip, messages: S.messages.slice(-60), custom: S.custom, prices: S.prices, recent: S.recent });
 }
 function loadCache() {
   const c = LS.get('ha_cache_' + S.user.id, null);
-  if (c) Object.assign(S, { household: c.household, members: c.members || {}, items: c.items || [], trip: c.trip, messages: c.messages || [], custom: c.custom || [], prices: c.prices || {} });
+  if (c) Object.assign(S, { household: c.household, members: c.members || {}, items: c.items || [], trip: c.trip, messages: c.messages || [], custom: c.custom || [], prices: c.prices || {}, recent: c.recent || { trips: [], purchases: [] } });
   S.lastRead = LS.get('ha_lastread_' + S.user.id, 0);
   rebuildProducts();
 }
@@ -242,6 +242,7 @@ async function loadAll() {
   const pendingMsgs = S.messages.filter(x => x._pending);
   S.messages = [...ms.data, ...pendingMsgs.filter(p => !ms.data.some(x => x.id === p.id))];
   S.custom = cp.data; rebuildProducts();
+  loadRecent(hid);
   saveCache();
   subscribe();
 }
@@ -313,7 +314,7 @@ function onTrip({ eventType, new: n }) {
     if (!was && n.shopper_id !== S.user.id) { vibrate([80, 60, 80]); showTripBanner(n); }
   } else {
     if (S.trip && S.trip.id === n.id) S.trip = null;
-    if (n.status === 'done') showThanks(n);
+    if (n.status === 'done') { showThanks(n); setTimeout(() => loadRecent(), 1500); }
     if (n.status === 'cancelled' && n.shopper_id !== S.user.id) toast('היציאה לסופר של ' + nameOf(n.shopper_id) + ' בוטלה');
   }
   saveCache(); render();
@@ -332,6 +333,76 @@ function onMessage({ new: n }) {
 async function onCustom() {
   const { data } = await sb.from('custom_products').select('*').eq('household_id', S.household.id).order('name');
   if (data) { S.custom = data; rebuildProducts(); saveCache(); if (S.sheetKind === 'picker') refreshPicker(); render(); }
+}
+
+/* recent finished trips (for "הקנייה האחרונה" and "אולי נגמר?") */
+async function loadRecent(hid = S.household?.id) {
+  if (!hid) return;
+  const tr = await sb.from('trips').select('id, shopper_id, finished_at, bought_count, actual_total, estimated_total').eq('household_id', hid).eq('status', 'done').order('finished_at', { ascending: false }).limit(6);
+  if (tr.error || !tr.data.length) { if (!tr.error) { S.recent = { trips: [], purchases: [] }; render(); } return; }
+  const pu = await sb.from('purchases').select('trip_id, name, qty, category, price').in('trip_id', tr.data.map(t => t.id));
+  if (pu.error) return;
+  S.recent = { trips: tr.data, purchases: pu.data };
+  saveCache(); render();
+}
+// products bought in at least 2 of the last trips (and in most of them) that aren't on the list now
+function maybeOut(items) {
+  const trips = S.recent.trips; if (trips.length < 2) return [];
+  const onList = new Set(items.map(i => i.name));
+  const seen = {};
+  for (const p of S.recent.purchases) { (seen[p.name] ||= { trips: new Set(), cat: p.category }).trips.add(p.trip_id); }
+  return Object.entries(seen)
+    .filter(([n, v]) => !onList.has(n) && v.trips.size >= 2 && v.trips.size / trips.length >= 0.4)
+    .sort((a, b) => b[1].trips.size - a[1].trips.size).slice(0, 6).map(([n, v]) => ({ name: n, cat: v.cat }));
+}
+const relDay = t => {
+  const d = new Date(t), now = new Date(); const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 864e5);
+  return days === 0 ? 'היום' : days === 1 ? 'אתמול' : days < 7 ? `לפני ${days} ימים` : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+};
+function tripItemsHtml(trip, purchases, idPrefix) {
+  const onList = new Set(superItems().filter(i => !i.in_cart).map(i => i.name));
+  const addable = purchases.filter(p => !onList.has(p.name));
+  return `${addable.length > 1 ? `<button class="chip pick all" data-act="re-add-all" data-trip="${trip.id}">+ להעביר הכול לרשימה (${addable.length})</button>` : ''}
+    <div class="ti-list">${purchases.map((p, k) => {
+      const has = onList.has(p.name); const pr = p.price ?? priceOf(p.name);
+      return `<div class="ti-row"><span class="emo" aria-hidden="true">${iconFor(p.name, p.category)}</span>
+        <span class="ti-n">${esc(p.name)}${qtyNum(p.qty) > 1 ? ` <span class="muted">×${qtyNum(p.qty)}</span>` : ''}</span>
+        ${pr != null ? `<span class="price-t">${ILS(pr)}</span>` : ''}
+        ${has ? '<span class="ti-has">✓ ברשימה</span>' : `<button class="ti-add" data-act="re-add" data-trip="${trip.id}" data-k="${k}" aria-label="להעביר את ${esc(p.name)} לרשימת הקניות">+ לרשימה</button>`}</div>`;
+    }).join('')}</div>`;
+}
+function lastTripCard(items) {
+  const t = S.recent.trips[0]; if (!t) return '';
+  const ps = S.recent.purchases.filter(p => p.trip_id === t.id); if (!ps.length) return '';
+  const total = t.actual_total ?? t.estimated_total;
+  return `<details class="card lastbuy" ${S.lastOpen ? 'open' : ''}>
+    <summary data-act="last-toggle"><span aria-hidden="true">🧾</span><span class="lb-t"><b>הקנייה האחרונה</b>
+      <small>${esc(nameOf(t.shopper_id))} · ${relDay(t.finished_at)} · ${ps.length} פריטים${total != null ? ' · ' + (t.actual_total == null ? '~' : '') + ILS(total) : ''}</small></span></summary>
+    <div class="lb-body">${tripItemsHtml(t, ps)}</div>
+  </details>`;
+}
+function reAdd(tripPurchases, list) {
+  let n = 0;
+  for (const p of list) { const r = addRow({ name: p.name, qty: String(qtyNum(p.qty)), category: p.category }); if (r !== 'dup') n++; }
+  saveCache(); render(); if (S.sheetKind === 'trip') setSheet(tripSheetHtml(S.tripView)); 
+  if (n) { vibrate(15); toast(n === 1 ? `${list[0].name} חזר לרשימה` : `${n} מוצרים חזרו לרשימה`); }
+}
+function tripSheetHtml(v) {
+  const t = v.trip; const total = t.actual_total ?? t.estimated_total;
+  return `${sheetHead(`🧾 ${new Date(t.finished_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}`)}
+    <div class="lead">${esc(nameOf(t.shopper_id))} · ${v.purchases.length} פריטים · ${total != null ? (t.actual_total == null ? 'משוער ' : '') + ILS(total) : 'בלי סכום'}
+      <button class="link" data-act="trip-total" data-id="${t.id}">${t.actual_total == null ? '+ סכום מהקופה' : 'עריכת סכום'}</button></div>
+    ${v.purchases.length ? tripItemsHtml(t, v.purchases) : '<div class="pk-empty">אין פירוט מוצרים לקנייה הזו<br>(קניות לפני שהתחלנו לשמור פירוט).</div>'}`;
+}
+async function openTripView(id) {
+  const t = (S.stats?.trips || []).find(x => x.id === id) || S.recent.trips.find(x => x.id === id); if (!t) return;
+  let purchases = S.recent.purchases.filter(p => p.trip_id === id);
+  if (!S.recent.trips.some(x => x.id === id)) {
+    const { data } = await sb.from('purchases').select('trip_id, name, qty, category, price').eq('trip_id', id);
+    purchases = data || [];
+  }
+  S.tripView = { trip: t, purchases };
+  openSheet(tripSheetHtml(S.tripView), 'tall scroll', 'trip');
 }
 
 /* ---------------- outbox (offline-safe item writes) ---------------- */
@@ -549,7 +620,7 @@ async function finishTrip(total = null) {
   closeSheet();
   await flush();
   const t = await rpc('finish_trip', { p_trip: S.trip.id, p_total: total });
-  if (t) { S.items = S.items.filter(i => !(i.list === 'super' && i.in_cart)); S.trip = null; saveCache(); showThanks(t); render(); }
+  if (t) { S.items = S.items.filter(i => !(i.list === 'super' && i.in_cart)); S.trip = null; saveCache(); showThanks(t); render(); loadRecent(); }
 }
 async function snoozeTrip(min) {
   closeSheet();
@@ -690,12 +761,7 @@ function renderMain() {
 
     let status;
     if (shopping) {
-      status = `<div class="hero">
-        <div class="lamp on">${I.bulb}</div>
-        <div class="t1">את/ה בדרך לסופר</div>
-        <div class="t2">${minsSince(trip.started_at)} דק׳ · ${inCart} מתוך ${items.length} בעגלה${cartB.known ? ' · בעגלה כ־' + ILS(cartB.sum) : ''}</div>
-        ${reminderDue() ? `<button class="due" data-act="confirm">⏰ עברו ${minsSince(trip.started_at)} דק׳ · לסיים את הקנייה?</button>` : `<div class="t3">חסר משהו? ⋯ ליד המוצר: "לא היה", "לקחתי משהו אחר" או שאלה</div>`}
-      </div>`;
+      status = `${reminderDue() ? `<button class="due wide" data-act="confirm">⏰ עברו ${minsSince(trip.started_at)} דק׳ · לסיים את הקנייה?</button>` : `<div class="shop-tip">חסר משהו? ⋯ ליד המוצר: "לא היה", "לקחתי משהו אחר" או שאלה</div>`}`;
     } else if (trip) {
       status = `<div class="status">
         <div class="lamp on">${I.bulb}</div>
@@ -718,8 +784,9 @@ function renderMain() {
         <button class="pc-x" data-act="push-dismiss" aria-label="לא עכשיו">${I.x}</button></div>`;
     }
 
+    const maybeOutList = maybeOut(items);
     const histChips = Object.entries(S.history)
-      .filter(([n]) => !items.some(i => i.name === n))
+      .filter(([n]) => !items.some(i => i.name === n) && !maybeOutList.some(m => m.name === n))
       .sort((a, b) => b[1] - a[1]).slice(0, 5)
       .map(([n]) => `<button class="chip" data-act="quick" data-name="${esc(n)}">+ ${esc(n)}</button>`).join('');
 
@@ -728,7 +795,8 @@ function renderMain() {
         <input id="add-input" type="text" placeholder="${trip && !shopping ? 'להוסיף ברגע האחרון…' : 'מה חסר? למשל: חלב ×2, תנובה'}" aria-label="הוספת פריט" autocomplete="off" enterkeyhint="done" value="${esc(S.addText)}">
         <button class="go" type="submit">הוספה</button>
       </form>
-      <div class="chips"><button class="chip pick" data-act="pick-open">${I.grid} בחירה מרשימה</button>${histChips}</div>`;
+      <div class="chips"><button class="chip pick" data-act="pick-open">${I.grid} בחירה מרשימה</button>${histChips}</div>
+      ${!shopping && maybeOutList.length ? `<div class="chips maybe"><span class="mo-l">אולי נגמר?</span>${maybeOutList.map(m => `<button class="chip mo" data-act="maybe-add" data-name="${esc(m.name)}" data-cat="${esc(m.cat)}">${iconFor(m.name, m.cat)} ${esc(m.name)}</button>`).join('')}</div>` : ''}`;
 
     let list;
     if (!items.length) {
@@ -747,17 +815,20 @@ function renderMain() {
 
     let fab;
     if (shopping) {
-      fab = `<div class="fab">
-        <button class="btn green" data-act="confirm" ${S.busy ? 'disabled' : ''}>סיימתי לקנות</button>
-        <button class="btn icon" data-act="cancel-ask" aria-label="ביטול היציאה לסופר">${I.x}</button>
-      </div>`;
+      fab = '';
     } else if (!trip) {
       fab = `<div class="fab"><button class="btn orange" data-act="start" ${S.busy ? 'disabled' : ''}>${I.cart} אני בדרך לסופר</button></div>`;
     } else fab = '';
 
     const offline = !S.online ? `<div class="offline">אין חיבור כרגע · השינויים יישמרו וישתלחו כשהקליטה תחזור</div>` : '';
-    const shopHeader = `<div class="top" style="padding-bottom:0"><h1 style="font-size:22px">רשימת הסופר</h1>${chatButton()}</div>`;
-    body = (shopping ? shopHeader : header) + offline + status + pushCard + add + list + fab;
+    const shopHeader = !shopping ? '' : `<div class="shopbar">
+      <span class="sb-lamp" aria-hidden="true"></span>
+      <span class="sb-t"><b>בדרך לסופר</b><small>${minsSince(trip.started_at)} דק׳ · ${inCart}/${items.length} בעגלה${cartB.known ? ' · ' + ILS(cartB.sum) : ''}</small></span>
+      ${chatButton()}
+      <button class="sb-more" data-act="shop-menu" aria-label="עוד אפשרויות">${I.more}</button>
+      <button class="sb-done" data-act="confirm" ${S.busy ? 'disabled' : ''}>סיימתי ✓</button>
+    </div>`;
+    body = (shopping ? shopHeader : header) + offline + status + pushCard + add + list + (shopping ? '' : lastTripCard(items)) + fab;
   }
 
   const nav = `<nav class="tabs">
@@ -999,7 +1070,7 @@ function openPrice(id) {
   setTimeout(() => { const el = document.getElementById('pp'); el?.focus(); el?.select(); }, 80);
 }
 function openTripTotal(id) {
-  const t = S.stats?.trips.find(x => x.id === id); if (!t) return;
+  const t = S.stats?.trips.find(x => x.id === id) || S.recent.trips.find(x => x.id === id); if (!t) return;
   openSheet(`${sheetHead('כמה יצא בקופה?')}
     <div class="lead">קנייה של ${esc(nameOf(t.shopper_id))} · ${new Date(t.finished_at).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}${t.estimated_total ? ' · משוער ' + ILS(t.estimated_total) : ''}</div>
     <form data-form="trip-total" data-id="${t.id}" class="finish-form">
@@ -1065,7 +1136,7 @@ function renderStats() {
   const chHtml = changes.map(c => `<div class="top-i"><span aria-hidden="true">${iconFor(c.n)}</span><span class="who-n">${esc(c.n)}</span>
     <span class="chg ${c.pct > 0 ? 'up' : 'down'}">${c.pct > 0 ? '▲' : '▼'} ${Math.abs(c.pct)}%</span><span class="muted">${ILS(c.prev)} ← ${ILS(c.cur)}</span></div>`).join('');
 
-  const recent = st.trips.slice(0, 10).map(t => `<button class="trip-r" data-act="trip-total" data-id="${t.id}">
+  const recent = st.trips.slice(0, 10).map(t => `<button class="trip-r" data-act="trip-view" data-id="${t.id}">
     <span class="av sm" style="background:${colorOf(t.shopper_id)}">${esc(initial(t.shopper_id))}</span>
     <span class="who-n">${new Date(t.finished_at).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })}<span class="muted"> · ${t.bought_count ?? 0} פריטים</span></span>
     <span class="tr-sum ${t.actual_total == null ? 'est' : ''}">${t.actual_total != null ? ILS(t.actual_total) : t.estimated_total != null ? '~' + ILS(t.estimated_total) : '+ סכום'}</span></button>`).join('');
@@ -1080,7 +1151,7 @@ function renderStats() {
     <div class="card pad"><h3>מי קנה</h3>${whoHtml}</div>
     ${top.length ? `<div class="card pad"><h3>הכי נקנה</h3>${topHtml}</div>` : ''}
     ${changes.length ? `<div class="card pad"><h3>שינויי מחירים</h3>${chHtml}</div>` : ''}
-    <div class="card pad"><h3>קניות אחרונות</h3><div class="muted small">לחיצה על קנייה מוסיפה או מתקנת את הסכום מהקופה</div>${recent}</div>
+    <div class="card pad"><h3>קניות אחרונות</h3><div class="muted small">לחיצה על קנייה: המוצרים שנקנו (אפשר להחזיר לרשימה) והסכום מהקופה</div>${recent}</div>
   </div>`;
 }
 
@@ -1179,6 +1250,19 @@ document.addEventListener('click', async e => {
     case 'item-more': openItemMore(b.dataset.id); break;
     case 'price': openPrice(b.dataset.id); break;
     case 'trip-total': openTripTotal(b.dataset.id); break;
+    case 'trip-view': openTripView(b.dataset.id); break;
+    case 'last-toggle': S.lastOpen = !b.parentElement.open; break;
+    case 'maybe-add': if (addRow({ name: b.dataset.name, qty: '1', category: b.dataset.cat }) !== 'dup') { vibrate(10); toast(b.dataset.name + ' נוסף לרשימה'); } saveCache(); render(); break;
+    case 're-add': case 're-add-all': {
+      const tid = b.dataset.trip;
+      const list = (S.tripView && S.tripView.trip.id === tid && S.sheetKind === 'trip') ? S.tripView.purchases : S.recent.purchases.filter(p => p.trip_id === tid);
+      if (act === 're-add') reAdd(list, [list[+b.dataset.k]]);
+      else { const onList = new Set(superItems().filter(i => !i.in_cart).map(i => i.name)); reAdd(list, list.filter(p => !onList.has(p.name))); }
+      break;
+    }
+    case 'shop-menu': openSheet(`${sheetHead('בדרך לסופר')}
+      <button class="opt" data-act="snooze"><span class="oe" aria-hidden="true">⏰</span><span><b>להזכיר לי שוב בעוד 10 דקות</b><small>"סיימת לקנות?" יחכה עוד קצת</small></span></button>
+      <button class="opt" data-act="cancel-ask"><span class="oe" aria-hidden="true">✕</span><span><b>ביטול היציאה לסופר</b><small>הסימונים בעגלה יתאפסו, והרשימה נשארת</small></span></button>`, '', 'shopmenu'); break;
     case 'oos': {
       const it = S.items.find(i => i.id === b.dataset.id); if (!it) break;
       closeSheet(); updateItem(it.id, { status: 'oos', status_note: '', in_cart: false });
@@ -1282,7 +1366,7 @@ document.addEventListener('submit', async e => {
       const pr = parsePrice(fd.total);
       closeSheet();
       const { data, error } = await sb.rpc('set_trip_total', { p_trip: f.dataset.id, p_total: pr ?? 0 });
-      if (error) toast('לא הצלחתי לשמור'); else { toast('הסכום נשמר'); loadStats(); }
+      if (error) toast('לא הצלחתי לשמור'); else { toast('הסכום נשמר'); loadStats(); loadRecent(); }
       break;
     }
     case 'custom-add': {

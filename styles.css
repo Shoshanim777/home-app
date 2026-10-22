@@ -308,3 +308,38 @@ nav.tabs button{min-width:64px}
 .banner-top .bt{background:none;border:0;color:inherit;text-align:right;font-family:inherit;padding:0;cursor:pointer}
 .banner-top .b-x{width:40px;height:40px;border:0;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .due{margin-top:8px;border:0;background:#fff;color:var(--orange-d);font-family:inherit;font-weight:700;font-size:14px;border-radius:999px;padding:8px 14px;box-shadow:0 2px 8px rgba(166,67,0,.15);min-height:40px}
+
+/* v1.4: shopper top bar, last purchase, maybe-out */
+.shopbar{position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:8px;margin:0 0 4px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;background:var(--orange-ground);border-bottom:1px solid #F6DEC8}
+.sb-lamp{width:14px;height:14px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 4px rgba(255,122,26,.22);animation:pulse2 2s ease-in-out infinite;flex-shrink:0;margin-inline-start:4px}
+@keyframes pulse2{50%{box-shadow:0 0 0 8px rgba(255,122,26,.08)}}
+.sb-t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.sb-t b{font-size:16px;font-weight:800}
+.sb-t small{font-size:12px;color:#6B5040;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shopbar .chatbtn{width:40px;height:40px;border-radius:12px}
+.sb-more{width:40px;height:40px;border:0;border-radius:12px;background:#fff;color:#6B5040;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-done{height:40px;border:0;border-radius:12px;background:var(--green);color:#fff;font-family:inherit;font-weight:700;font-size:15px;padding:0 12px;flex-shrink:0;white-space:nowrap}
+.shop-tip{margin:4px 16px 0;font-size:12px;color:#8A6A55;text-align:center}
+.due.wide{display:block;margin:6px auto 0}
+.screen.trip{padding-bottom:calc(96px + var(--safe-b))}
+
+.chips.maybe{align-items:center}
+.mo-l{font-size:12px;font-weight:700;color:var(--orange-d);margin-inline-end:2px}
+.chip.mo{background:#FFF0E3;color:var(--orange-d)}
+.chip.all{margin-bottom:6px}
+
+.lastbuy{margin:14px 16px 0;padding:0 14px}
+.lastbuy summary{list-style:none;display:flex;align-items:center;gap:12px;min-height:60px;cursor:pointer;font-size:22px}
+.lastbuy summary::-webkit-details-marker{display:none}
+.lastbuy summary::after{content:'▾';font-size:14px;color:var(--muted);margin-inline-start:auto;transition:transform .2s}
+.lastbuy[open] summary::after{transform:rotate(180deg)}
+.lb-t{display:flex;flex-direction:column;gap:1px}
+.lb-t b{font-size:15px}
+.lb-t small{font-size:12px;color:var(--muted)}
+.lb-body{padding:0 0 12px}
+.ti-list{display:flex;flex-direction:column}
+.ti-row{display:flex;align-items:center;gap:10px;min-height:48px;border-top:1px solid var(--line)}
+.ti-n{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ti-add{border:0;background:var(--accent-soft);color:var(--accent-d);font-family:inherit;font-weight:700;font-size:13px;border-radius:10px;padding:0 10px;height:34px;white-space:nowrap;flex-shrink:0}
+.ti-has{font-size:12px;font-weight:600;color:#0E7A4F;white-space:nowrap;flex-shrink:0}
+.lead .link{padding:0 6px;font-size:14px}
