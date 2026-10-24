@@ -78,7 +78,21 @@ async function reminders() {
       tag: 'remind-' + t.id, url: APP_URL + '?confirm=1', requireInteraction: true, kind: 'remind', badge: 'badge-clock.png', icon: 'notif-trip.png'
     });
   }
-  return { reminded: due.length };
+  return { reminded: due.length, asks: await askReminders() };
+}
+
+// a request nobody took for two days gets one gentle nudge
+async function askReminders() {
+  const stale = await sql`
+    update public.asks set reminded = true
+     where status = 'open' and not reminded and created_at < now() - interval '2 days'
+     returning id, household_id, user_id, body, to_user`;
+  for (const a of stale) {
+    const who = await nameIn(a.household_id, a.user_id);
+    const to = a.to_user ? [a.to_user] : await othersInHousehold(a.household_id, a.user_id);
+    await pushTo(to, { title: `⏰ הבקשה של ${who} עדיין פתוחה`, body: `${a.body} · מישהו יכול?`, tag: 'ask-' + a.id, url: APP_URL + '?family=ask', kind: 'ask', icon: 'notif-ask.png', badge: 'badge-bag.png' });
+  }
+  return stale.length;
 }
 
 // trips and messages: called by the database trigger (public.notify_event), not by the phones
@@ -121,6 +135,28 @@ const IL_TIME = (t: string | Date) => new Date(t).toLocaleTimeString('he-IL', { 
 const nameIn = async (hid: string, uid: string) =>
   ((await sql`select display_name from public.members where household_id = ${hid} and user_id = ${uid}`)[0]?.display_name as string) || 'מישהו';
 const at = (place: string) => /^[A-Za-z0-9]/.test(place) ? `ב־${place}` : `ב${place}`;
+
+const PLACE_KIND: Record<string, string> = { pharm: 'מבית מרקחת', home: 'מחנות כלי בית', post: 'מהדואר', fuel: 'מתחנת דלק', store: 'ממכולת' };
+const DUE: Record<string, string> = { today: 'עד היום', tomorrow: 'עד מחר', week: 'השבוע', none: 'לא דחוף' };
+
+async function askEvent(type: string, id: string, from: string) {
+  const ASK = { icon: 'notif-ask.png', badge: 'badge-bag.png', kind: 'ask' };
+  const [a] = await sql`select * from public.asks where id = ${id}`;
+  if (!a) return { sent: 0 };
+  const who = await nameIn(a.household_id, a.user_id);
+  if (type === 'ask_new') {
+    const to = a.to_user ? [a.to_user] : await othersInHousehold(a.household_id, a.user_id);
+    return pushTo(to, { title: `🙋 ${who} ${a.to_user ? 'מבקש/ת ממך' : 'מבקש/ת'}: ${a.body}`,
+      body: [PLACE_KIND[a.place_kind], DUE[a.due], 'מי יכול?'].filter(Boolean).join(' · '), tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK });
+  }
+  const by = a.updated_by as string;
+  if (!by || by === a.user_id) return { sent: 0 };            // the requester changed their own request
+  const actor = await nameIn(a.household_id, by);
+  if (a.status === 'taken') return pushTo([a.user_id], { title: `🙋 ${actor} מביא/ה לך ${a.body}`, body: 'אפשר לנשום, זה מטופל', tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK });
+  if (a.status === 'done') return pushTo([a.user_id], { title: `✓ ${actor} הביא/ה לך ${a.body}`, body: 'לשלוח תודה?', tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK, badge: 'badge-check.png' });
+  if (a.status === 'open' && from === 'taken') return pushTo([a.user_id], { title: `${actor} לא יספיק/תספיק להביא ${a.body}`, body: 'הבקשה חזרה להיות פתוחה', tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK });
+  return { sent: 0 };
+}
 
 async function familyEvent(type: string, id: string) {
   const LAND = { icon: 'notif-land.png', badge: 'badge-moto.png', kind: 'land' };
@@ -199,7 +235,8 @@ async function weekly() {
           union all select household_id from public.trips where started_at > now() - interval '7 days'
           union all select household_id from public.purchases where created_at > now() - interval '7 days'
           union all select household_id from public.landings where created_at > now() - interval '7 days'
-          union all select household_id from public.deliveries where created_at > now() - interval '7 days') x
+          union all select household_id from public.deliveries where created_at > now() - interval '7 days'
+          union all select household_id from public.asks where created_at > now() - interval '7 days') x
         where household_id <> ${ex})::int active,
       (select count(*) from public.trips where status = 'done' and finished_at > now() - interval '7 days' and household_id <> ${ex})::int trips,
       (select count(*) from public.members where joined_at > now() - interval '7 days' and household_id <> ${ex})::int joined`;
@@ -221,6 +258,10 @@ Deno.serve(async (req) => {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
       if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
       if (body.type === 'member_join') return json(await memberJoin(String(body.hid || ''), String(body.uid || '')));
+      if (String(body.type || '').startsWith('ask_')) {
+        const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ sent: 0 });
+        return json(await askEvent(String(body.type), id, String(body.from || '')));
+      }
       return json(await serverEvent(String(body.type || ''), String(body.id || '')));
     }
 

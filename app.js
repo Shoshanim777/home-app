@@ -73,7 +73,7 @@ const S = {
   addText: '', history: LS.get('ha_history', {}),
   shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
   removing: new Map(), onboard: null, picker: null, sheetKind: null, orderDraft: null,
-  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], loaded: false }, pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
+  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], loaded: false }, pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
 };
 const REMOVE_MS = 3000;
 let channel = null;
@@ -295,6 +295,7 @@ function subscribe(force = false) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'landing_requests', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_lines', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'asks', filter: f }, famReload)
     .on('broadcast', { event: 'heart' }, ({ payload }) => {
       if (payload?.to === S.user.id) { vibrate([60, 40, 60]); toast(nameOf(payload.from) + ' שלח/ה לך לב ❤'); }
     })
@@ -575,7 +576,7 @@ async function onForegroundPush(p) {
   if (p.kind === 'remind') { maybePromptConfirm(); return; }
   if (p.kind === 'trip' && S.trip && S.trip.shopper_id !== S.user.id) { showTripBanner(S.trip); return; }
   if (p.kind === 'thanks' || p.kind === 'test') { if (p.kind === 'test') toast(p.title + ' · ' + p.body); return; }
-  if (p.kind === 'land' || p.kind === 'delivery') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
+  if (p.kind === 'land' || p.kind === 'delivery' || p.kind === 'ask') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
   if (p.title) { vibrate(80); showInfoBanner({ title: p.title, body: p.body, act: p.kind === 'message' ? 'chat' : '' }); }
 }
 
@@ -1230,10 +1231,11 @@ const STEPS = [['open', 'פתוחה'], ['ordered', 'הוזמן'], ['onway', 'ב�
 async function loadFamily(hid = S.household?.id) {
   if (!hid) return;
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const [pl, ld, dv] = await Promise.all([
+  const [pl, ld, dv, ak] = await Promise.all([
     sb.from('places').select('*').eq('household_id', hid),
     sb.from('landings').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
-    sb.from('deliveries').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15)
+    sb.from('deliveries').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
+    sb.from('asks').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(60)
   ]);
   if (pl.error || ld.error || dv.error) return;
   const lids = ld.data.map(x => x.id), dids = dv.data.map(x => x.id);
@@ -1241,7 +1243,7 @@ async function loadFamily(hid = S.household?.id) {
     lids.length ? sb.from('landing_requests').select('*').in('landing_id', lids).order('created_at') : { data: [] },
     dids.length ? sb.from('delivery_lines').select('*').in('delivery_id', dids).order('created_at') : { data: [] }
   ]);
-  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], loaded: true };
+  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], asks: ak.error ? [] : ak.data, loaded: true };
   if (S.tab === 'family' && !famTyping()) render();
   if (S.sheetKind === 'landing') refreshLandingStars();
 }
@@ -1346,6 +1348,7 @@ function myLandingCard(L) {
   return `<section class="fam-card land live">
     <div class="fam-h"><div><h2>נחתת ${esc(atPlace(L.place))}</h2><p>${L.address ? esc(L.address) + ' · ' : ''}${esc(othersName())} יודע/ת · עד ${hhmm(L.ends_at)}</p></div>
       <img class="fam-ill" src="icons/land.svg" alt=""></div>
+    ${landingAsksBox(L)}
     <div class="reqs">${reqs.length ? reqs.map(r => `<div class="req ${r.done ? 'done' : ''}">
         <span class="av sm" style="background:${colorOf(r.user_id)}">${esc(initial(r.user_id))}</span>
         <span class="req-t">${r.item_id ? iconFor(r.body) + ' ' : ''}${esc(r.body)}</span>
@@ -1422,12 +1425,13 @@ function renderFamily() {
   return top + `<div class="fam">
     ${D ? deliveryCard(D) : ''}
     ${L ? (L.user_id === S.user.id ? myLandingCard(L) : theirLandingCard(L)) : ''}
+    ${asksSection()}
     ${L && L.user_id === S.user.id ? '' : landingCard()}
     ${D ? '' : deliveryPromo()}
     ${familyFeed()}
   </div>`;
 }
-const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
+const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || S.fam.asks.some(a => a.status === 'open' && askForMe(a)) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
 
 function landingSheetHtml() {
   const favs = favPlaces(), favNames = new Set(favs.map(p => p.name));
@@ -1467,6 +1471,122 @@ function openDeliveryForm() {
       <div class="field"><label for="dv-m">מה את/ה מזמין/ה (לא חובה)</label><input id="dv-m" name="mine" maxlength="200" autocomplete="off" placeholder="למשל: פיצה משפחתית חצי זיתים"></div>
       <button class="btn violet" type="submit">פתיחה ושליחה ל${esc(othersName())}</button>
     </form>`, 'tall scroll', 'delivery');
+}
+
+/* ---------------- family room: "מי יכול להביא לי?" ---------------- */
+const ASK_PLACES = [['pharm', '💊 בית מרקחת'], ['home', '🔧 כלי בית'], ['post', '📮 דואר'], ['fuel', '⛽ תחנת דלק'], ['store', '🏪 מכולת'], ['any', 'איפה שיש']];
+const ASK_DUE = [['today', 'היום'], ['tomorrow', 'מחר'], ['week', 'השבוע'], ['none', 'לא דחוף']];
+const ASK_PLACE_LABEL = Object.fromEntries(ASK_PLACES);
+// which kinds of stop can serve which kind of request
+const ASK_MATCH = { pharm: ['pharm'], fuel: ['fuel'], store: ['super', 'kiosk', 'store', 'fuel', 'food', 'bakery'], home: ['store'], post: [], any: null };
+const askMatchesPlace = (a, placeName) => {
+  const kind = allPlaces().find(p => p.name === placeName)?.kind || 'store';
+  const ok = ASK_MATCH[a.place_kind]; return ok === null || ok === undefined || ok.includes(kind);
+};
+const askForMe = a => a.user_id !== S.user.id && (!a.to_user || a.to_user === S.user.id);
+const openAsks = () => S.fam.asks.filter(a => a.status === 'open' || a.status === 'taken');
+const thanked = new Set(LS.get('ha_ask_thanked', []));
+function dueLabel(a) {
+  if (a.due === 'none') return 'לא דחוף';
+  const created = new Date(a.created_at), today = new Date(new Date().toDateString());
+  const end = new Date(created.toDateString()); end.setDate(end.getDate() + (a.due === 'today' ? 1 : a.due === 'tomorrow' ? 2 : 7));
+  if (Date.now() >= end.getTime()) return 'באיחור';
+  const daysLeft = Math.round((end - today) / 864e5);
+  return daysLeft <= 1 ? 'עד היום' : daysLeft === 2 ? 'עד מחר' : 'השבוע';
+}
+// a request that's really a supermarket product belongs on the supermarket list
+function isSuperProduct(text) {
+  const m = catalogMatch(String(text || '').replace(/\s*[×x]\s*\d+$/, '').trim());
+  return !!m && !['טיפוח ופארם', 'אחר'].includes(m.cat);
+}
+
+async function newAsk(fd) {
+  const body = String(fd.body || '').trim().slice(0, 120); if (!body) return;
+  const row = { household_id: S.household.id, user_id: S.user.id, body,
+    place_kind: ASK_PLACES.some(([k]) => k === fd.place) ? fd.place : 'any',
+    due: ASK_DUE.some(([k]) => k === fd.due) ? fd.due : 'week',
+    to_user: fd.to && S.members[fd.to] && fd.to !== S.user.id ? fd.to : null, status: 'open', updated_by: S.user.id };
+  const { data, error } = await sb.from('asks').insert(row).select().single();
+  if (error) return famErr(error);
+  S.fam.asks.unshift(data); closeSheet(); S.tab = 'family'; render(); vibrate(30);
+  toast('הבקשה נשלחה ל' + (row.to_user ? nameOf(row.to_user) : othersName()));
+}
+async function askPatch(id, patch, msg) {
+  const a = S.fam.asks.find(x => x.id === id); if (!a) return;
+  patch = { ...patch, updated_by: S.user.id, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('asks').update(patch).eq('id', id);
+  if (error) return famErr(error);
+  Object.assign(a, patch); render(); if (msg) toast(msg);
+}
+async function askThanks(id) {
+  const a = S.fam.asks.find(x => x.id === id); if (!a || !a.taker_id) return;
+  thanked.add(id); LS.set('ha_ask_thanked', [...thanked].slice(-60)); render();
+  await sendMessage({ body: `❤ תודה שהבאת לי ${a.body}!` });
+  toast('התודה נשלחה ל' + nameOf(a.taker_id) + ' ❤');
+}
+
+function askChips(a) {
+  const due = dueLabel(a);
+  return `<div class="ask-chips">${a.place_kind && a.place_kind !== 'any' ? `<span>${ASK_PLACE_LABEL[a.place_kind]}</span>` : ''}
+    <span class="${due === 'עד היום' || due === 'באיחור' ? 'hot' : ''}">⏰ ${due}</span></div>`;
+}
+function askCard(a) {
+  const mine = a.user_id === S.user.id, iTook = a.taker_id === S.user.id;
+  const to = a.to_user ? (a.to_user === S.user.id ? 'ביקש/ה ממך' : mine ? 'ביקשת מ' + nameOf(a.to_user) : 'ביקש/ה מ' + nameOf(a.to_user)) : 'לכולם';
+  let state = '', acts = '';
+  if (a.status === 'open') {
+    if (mine) { state = '<span class="ask-st wait">מחכה למתנדב</span>'; acts = `<button class="ask-btn ghost" data-act="ask-cancel" data-id="${a.id}">ביטול הבקשה</button>`; }
+    else acts = `<button class="ask-btn pink" data-act="ask-take" data-id="${a.id}">אני לוקח/ת 🙋</button>`;
+  } else if (a.status === 'taken') {
+    if (iTook) { state = '<span class="ask-st me">🙋 את/ה מביא/ה</span>'; acts = `<div class="row2"><button class="ask-btn ghost" data-act="ask-drop" data-id="${a.id}">ויתרתי</button><button class="ask-btn green" data-act="ask-done" data-id="${a.id}">הבאתי ✓</button></div>`; }
+    else state = `<span class="ask-st">🙋 ${esc(nameOf(a.taker_id))} מביא/ה</span>`;
+    if (mine) acts = `<button class="ask-btn ghost" data-act="ask-got" data-id="${a.id}">קיבלתי ✓</button>`;
+  } else if (a.status === 'done') {
+    state = `<span class="ask-st ok">✓ ${a.taker_id === S.user.id ? 'הבאת' : esc(nameOf(a.taker_id)) + ' הביא/ה'}</span>`;
+    if (mine && a.taker_id && a.taker_id !== S.user.id && !thanked.has(a.id)) acts = `<button class="ask-btn pink" data-act="ask-thanks" data-id="${a.id}">❤ תודה ל${esc(nameOf(a.taker_id))}</button>`;
+  }
+  return `<div class="ask ${iTook && a.status === 'taken' ? 'took' : ''} ${a.status === 'done' ? 'done' : ''}">
+    <div class="ask-top"><span class="av sm2" style="background:${colorOf(a.user_id)}">${esc(initial(a.user_id))}</span>
+      <div class="ask-t"><b>${esc(a.body)}</b><small>${mine ? 'את/ה' : esc(nameOf(a.user_id))} · ${relDay(a.created_at)} · ${to}</small></div>${state}</div>
+    ${a.status === 'done' ? '' : askChips(a)}${acts}</div>`;
+}
+function asksSection() {
+  const recentDone = S.fam.asks.filter(a => a.status === 'done' && Date.now() - new Date(a.updated_at).getTime() < 24 * 3600e3 && (a.user_id === S.user.id || a.taker_id === S.user.id));
+  const list = [...openAsks(), ...recentDone]
+    .sort((x, y) => (askForMe(y) && y.status === 'open') - (askForMe(x) && x.status === 'open') || (x.created_at < y.created_at ? 1 : -1));
+  return `<section class="fam-card ask-card">
+    <div class="fam-h"><div><h2>מי יכול להביא לי?</h2><p>בקשות שמחכות למי שיעבור ליד</p></div><img class="fam-ill" src="icons/ask.svg" alt=""></div>
+    ${list.length ? `<div class="asks">${list.map(askCard).join('')}</div>` : '<div class="req-empty ask-empty">אין בקשות פתוחות. צריך משהו? בקשו, ומי שעובר ליד יביא.</div>'}
+    <button class="btn ink fam-btn" data-act="ask-new">+ בקשה חדשה</button>
+  </section>`;
+}
+// asks that fit the shop someone just landed at
+function landingAsksBox(L) {
+  const fit = S.fam.asks.filter(a => a.status === 'open' && askForMe(a) && askMatchesPlace(a, L.place));
+  if (!fit.length) return '';
+  return `<div class="ask-match"><b>🙋 ${fit.length === 1 ? 'יש בקשה פתוחה שמתאימה לכאן' : `יש ${fit.length} בקשות פתוחות שמתאימות לכאן`}</b>
+    ${fit.map(a => `<div class="am-row"><span class="av sm2" style="background:${colorOf(a.user_id)}">${esc(initial(a.user_id))}</span>
+      <span class="am-t"><b>${esc(a.body)}</b><small>${dueLabel(a)}</small></span>
+      <button class="ask-btn pink" data-act="ask-take" data-id="${a.id}">אני לוקח/ת 🙋</button></div>`).join('')}</div>`;
+}
+function askSheetHtml() {
+  const others = Object.values(S.members).filter(m => m.user_id !== S.user.id);
+  return `${sheetHead('מי יכול להביא לי?')}
+    <form data-form="ask" class="ask-form">
+      <div class="field"><label for="ask-body">מה צריך?</label><input id="ask-body" name="body" maxlength="120" autocomplete="off" required placeholder="למשל: אקמול, סוללות AA, מטען"></div>
+      <div class="ask-hint" id="ask-hint" hidden><div><b id="ask-hint-t"></b> הוא מוצר מהסופר. להוסיף אותו לרשימת הסופר במקום?</div>
+        <div class="row2"><button type="button" class="ask-btn orange" data-act="ask-to-list">לרשימת הסופר 🛒</button><button type="button" class="ask-btn ghost" data-act="ask-hint-no">לא, זו בקשה</button></div></div>
+      <fieldset class="seg"><legend>מאיפה (לא חובה)</legend>${ASK_PLACES.map(([k, t]) => `<label><input type="radio" name="place" value="${k}" ${k === 'any' ? 'checked' : ''}><span>${t}</span></label>`).join('')}</fieldset>
+      <fieldset class="seg"><legend>עד מתי</legend>${ASK_DUE.map(([k, t]) => `<label><input type="radio" name="due" value="${k}" ${k === 'week' ? 'checked' : ''}><span>${t}</span></label>`).join('')}</fieldset>
+      ${others.length > 1 ? `<fieldset class="seg"><legend>ממי מבקשים</legend><label><input type="radio" name="to" value="" checked><span>כולם</span></label>${others.map(m => `<label><input type="radio" name="to" value="${m.user_id}"><span>${esc(m.display_name)}</span></label>`).join('')}</fieldset>` : ''}
+      <button class="btn pink-b" type="submit">שליחת הבקשה</button>
+    </form>`;
+}
+function openAskForm() { S.askHintOff = false; openSheet(askSheetHtml(), 'tall scroll', 'ask'); setTimeout(() => document.getElementById('ask-body')?.focus(), 250); }
+function updateAskHint(v) {
+  const h = document.getElementById('ask-hint'); if (!h) return;
+  const show = !S.askHintOff && isSuperProduct(v);
+  h.hidden = !show; if (show) document.getElementById('ask-hint-t').textContent = v.trim();
 }
 
 /* ---------------- events ---------------- */
@@ -1584,6 +1704,15 @@ document.addEventListener('click', async e => {
     case 'lreq-item': { const it = S.items.find(i => i.id === b.dataset.id); if (it) requestOnLanding(it.name + (it.qty && it.qty !== '1' ? ' ×' + it.qty : ''), it.id); break; }
     case 'lreq-done': requestDone(b.dataset.id); break;
     case 'del-open': openDeliveryForm(); break;
+    case 'ask-new': openAskForm(); break;
+    case 'ask-take': askPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id }, 'מעולה! ' + (nameOf(S.fam.asks.find(a => a.id === b.dataset.id)?.user_id)) + ' קיבל/ה הודעה'); break;
+    case 'ask-drop': askPatch(b.dataset.id, { status: 'open', taker_id: null }, 'הבקשה חזרה להיות פתוחה'); break;
+    case 'ask-done': askPatch(b.dataset.id, { status: 'done' }, 'תודה! הבקשה נסגרה ✓'); break;
+    case 'ask-got': askPatch(b.dataset.id, { status: 'done' }); break;
+    case 'ask-cancel': askPatch(b.dataset.id, { status: 'cancelled' }, 'הבקשה בוטלה'); break;
+    case 'ask-thanks': askThanks(b.dataset.id); break;
+    case 'ask-to-list': { const v = document.getElementById('ask-body')?.value.trim(); if (v) { closeSheet(); addItem(v); toast('נוסף לרשימת הסופר 🛒'); } break; }
+    case 'ask-hint-no': S.askHintOff = true; updateAskHint(''); document.getElementById('ask-body')?.focus(); break;
     case 'del-status': deliveryPatch(b.dataset.id, { status: b.dataset.s }); break;
     case 'del-more': { const d = S.fam.dels.find(x => x.id === b.dataset.id); if (d) deliveryPatch(d.id, { closes_at: new Date(Math.max(Date.now(), new Date(d.closes_at).getTime()) + 5 * 60000).toISOString() }); break; }
     case 'dline-del': { const { error } = await sb.from('delivery_lines').delete().eq('id', b.dataset.id); if (error) famErr(error); else { S.fam.lines = S.fam.lines.filter(l => l.id !== b.dataset.id); render(); } break; }
@@ -1597,7 +1726,7 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('input', e => { if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); });
+document.addEventListener('input', e => { if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); if (e.target.id === 'ask-body') updateAskHint(e.target.value); });
 
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]'); if (!f) return;
@@ -1608,6 +1737,7 @@ document.addEventListener('submit', async e => {
     case 'place': if (await savePlace(f.dataset.name, { address: String(fd.address || '').trim().slice(0, 60) })) { toast('נשמר'); openLanding(); } break;
     case 'lreq': { const t = String(fd.text || '').trim(); if (t) { f.reset(); requestOnLanding(t); } break; }
     case 'del-new': openDeliveryNow(fd); break;
+    case 'ask': newAsk(fd); break;
     case 'dline': { const t = String(fd.text || '').trim(); if (t) { f.reset(); addDeliveryLine(f.dataset.id, t); } break; }
     case 'add': {
       const v = S.addText.trim(); if (!v) return;
