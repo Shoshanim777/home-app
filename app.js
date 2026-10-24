@@ -45,15 +45,15 @@ const CAT_ICON = { 'ירקות ופירות': '🥕', 'מקרר': '🥛', 'מא�
 
 /* built-in product catalog for "בחירה מרשימה" */
 const CATALOG = [
-  { name: 'ירקות ופירות', items: [['🍅','עגבניות'],['🥒','מלפפונים'],['🧅','בצל'],['🧄','שום'],['🥕','גזר'],['🫑','פלפל'],['🌶️','פלפל ירוק חריף'],['🥬','חסה'],['🥔','תפוחי אדמה'],['🍠','בטטה'],['🥑','אבוקדו'],['🍆','חציל'],['🥦','ברוקולי'],['🍄','פטריות'],['🌿','פטרוזיליה'],['🌿','כוסברה'],['🌿','שמיר'],['🍋','לימון'],['🍌','בננות'],['🍎','תפוחים'],['🍊','תפוזים'],['🍐','אגסים'],['🍇','ענבים'],['🍓','תותים'],['🍒','דובדבנים'],['🍉','אבטיח'],['🥭','מנגו']] },
-  { name: 'מקרר', items: [['🥛','חלב'],['🥚','ביצים'],['🧀','גבינה צהובה'],['🧀','גבינה לבנה'],['🧀','גבינת פטה'],['🧀','גבינת קשקבל'],['🥣','קוטג׳'],['🍶','יוגורט'],['🧈','חמאה'],['🥛','שמנת מתוקה'],['🍶','שמנת חמוצה'],['🍮','מעדנים'],['🧀','לבנה'],['🧀','בולגרית'],['🥛','שוקו']] },
+  { name: 'ירקות ופירות', items: [['svg:cauliflower','כרובית'],['🍅','עגבניות'],['🥒','מלפפונים'],['🧅','בצל'],['🧄','שום'],['🥕','גזר'],['🫑','פלפל'],['🌶️','פלפל ירוק חריף'],['🥬','חסה'],['🥔','תפוחי אדמה'],['🍠','בטטה'],['🥑','אבוקדו'],['🍆','חציל'],['🥦','ברוקולי'],['🍄','פטריות'],['🌿','פטרוזיליה'],['🌿','כוסברה'],['🌿','שמיר'],['🍋','לימון'],['🍌','בננות'],['🍎','תפוחים'],['🍊','תפוזים'],['🍐','אגסים'],['🍇','ענבים'],['🍓','תותים'],['🍒','דובדבנים'],['🍉','אבטיח'],['🥭','מנגו']] },
+  { name: 'מקרר', items: [['svg:pudding','מילקי'],['🥛','חלב'],['🥚','ביצים'],['🧀','גבינה צהובה'],['🧀','גבינה לבנה'],['🧀','גבינת פטה'],['🧀','גבינת קשקבל'],['🥣','קוטג׳'],['🍶','יוגורט'],['🧈','חמאה'],['🥛','שמנת מתוקה'],['🍶','שמנת חמוצה'],['🍮','מעדנים'],['🧀','לבנה'],['🧀','בולגרית'],['🥛','שוקו']] },
   { name: 'מאפים', items: [['🍞','לחם'],['🍞','לחם מחמצת'],['🫓','פיתות'],['🥖','באגט'],['🍞','לחמניות'],['🥯','בייגל'],['🥐','קרואסונים'],['🫓','טורטיות'],['🍞','חלה'],['🍰','עוגה']] },
   { name: 'בשר ודגים', items: [['🍗','חזה עוף'],['🍗','חזה עוף לשניצל'],['🍗','שניצל'],['🍗','כרעיים (פולקה)'],['🍗','פרגיות'],['🥩','בשר טחון'],['🥩','סטייק'],['🍔','המבורגרים'],['🌭','נקניקיות'],['🐟','סלמון'],['🐟','פילה דג'],['🥓','פסטרמה']] },
-  { name: 'מזווה', items: [['🍚','אורז'],['🍝','פסטה'],['🍝','ספגטי'],['🌾','קמח'],['🌾','קמח שקדים'],['🍬','סוכר'],['🧂','מלח'],['🧂','פלפל שחור'],['🫒','שמן זית'],['🌻','שמן קנולה'],['☕','קפה'],['🍵','תה'],['🥣','קורנפלקס'],['🥣','גרנולה'],['🥫','טונה'],['🥫','רסק עגבניות'],['🫘','חומוס'],['🫘','עדשים'],['🫙','טחינה'],['🍯','דבש'],['🍓','ריבה'],['🍫','ממרח שוקולד'],['🥜','אגוזים'],['🫒','זיתים'],['🥒','מלפפון חמוץ'],['🍅','קטשופ'],['🥚','מיונז']] },
+  { name: 'מזווה', items: [['svg:ptitim','פתיתים'],['svg:mustard','חרדל'],['🍚','אורז'],['🍝','פסטה'],['🍝','ספגטי'],['🌾','קמח'],['🌾','קמח שקדים'],['🍬','סוכר'],['🧂','מלח'],['🧂','פלפל שחור'],['🫒','שמן זית'],['🌻','שמן קנולה'],['☕','קפה'],['🍵','תה'],['🥣','קורנפלקס'],['🥣','גרנולה'],['🥫','טונה'],['🥫','רסק עגבניות'],['🫘','חומוס'],['🫘','עדשים'],['🫙','טחינה'],['🍯','דבש'],['🍓','ריבה'],['🍫','ממרח שוקולד'],['🥜','אגוזים'],['🫒','זיתים'],['🥒','מלפפון חמוץ'],['🍅','קטשופ'],['🥚','מיונז']] },
   { name: SNACKS, items: [['🍫','שוקולד'],['🥚','ביצת קינדר'],['🥜','במבה'],['🥨','ביסלי'],['🍪','עוגיות']] },
   { name: 'קפואים', items: [['🍦','גלידה'],['🍕','פיצה קפואה'],['🥟','בורקס'],['🥞','מלאווח'],['🥦','ירקות קפואים'],['🍟','צ׳יפס קפוא'],['🧊','קרח']] },
   { name: 'משקאות', items: [['💧','מים'],['🫧','סודה'],['🥤','קולה'],['🥤','ספרייט זירו'],['⚡','רד בול ללא סוכר'],['🧃','מיץ'],['🍺','בירה'],['🍷','יין אדום'],['🥂','יין לבן'],['🥛','חלב סויה'],['🥛','חלב שקדים']] },
-  { name: 'ניקיון ובית', items: [['🧻','נייר טואלט'],['🧻','מגבות נייר'],['🧻','טישו'],['🧽','ספוגים'],['🧤','כפפות גומי'],['🧴','נוזל כלים'],['🫧','טבליות למדיח'],['🧴','נוזל כביסה (כביסכל)'],['🧺','אבקת כביסה'],['🧴','מרכך כביסה'],['🗑️','שקיות זבל'],['🧼','סבון ידיים'],['🧪','אקונומיקה'],['🧹','מנקה רצפות'],['🧻','מגבונים'],['🔋','סוללות'],['💡','נורות'],['🥡','נייר אפייה'],['🥡','נייר כסף (אלומיניום)']] },
+  { name: 'ניקיון ובית', items: [['svg:cup','כוסות אספרסו חד פעמי'],['🧻','נייר טואלט'],['🧻','מגבות נייר'],['🧻','טישו'],['🧽','ספוגים'],['🧤','כפפות גומי'],['🧴','נוזל כלים'],['🫧','טבליות למדיח'],['🧴','נוזל כביסה (כביסכל)'],['🧺','אבקת כביסה'],['🧴','מרכך כביסה'],['🗑️','שקיות זבל'],['🧼','סבון ידיים'],['🧪','אקונומיקה'],['🧹','מנקה רצפות'],['🧻','מגבונים'],['🔋','סוללות'],['💡','נורות'],['🥡','נייר אפייה'],['🥡','נייר כסף (אלומיניום)']] },
   { name: 'טיפוח ופארם', items: [['🧴','שמפו'],['🧴','מרכך שיער'],['🪥','משחת שיניים'],['🪥','מברשות שיניים'],['🧴','דאודורנט'],['🪒','סכיני גילוח'],['🧴','קרם גוף'],['☀️','קרם הגנה'],['🩹','פלסטרים'],['💊','משככי כאבים'],['🧻','צמר גפן']] }
 ];
 const CATALOG_MAP = new Map();
@@ -73,7 +73,7 @@ const S = {
   addText: '', history: LS.get('ha_history', {}),
   shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
   removing: new Map(), onboard: null, picker: null, sheetKind: null, orderDraft: null,
-  lastRead: 0, pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
+  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], loaded: false }, pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
 };
 const REMOVE_MS = 3000;
 let channel = null;
@@ -100,7 +100,17 @@ function guessCategory(name) {
   for (const [cat, words] of CATS) for (const w of words) if (w.length > len && n.includes(w)) { best = cat; len = w.length; }
   return best || 'אחר';
 }
-const iconFor = (name, category) => catalogMatch(name)?.emo || CAT_ICON[category] || '🛒';
+// products with no fitting emoji get a drawn icon (icons/*.svg); stored as "svg:<name>"
+const SVG_ICONS = [['כוסות אספרסו', 'cup'], ['כוס חד פעמי', 'cup'], ['כוסות חד פעמי', 'cup'], ['כוסות קפה', 'cup'], ['פתיתים', 'ptitim'],
+  ['מילקי', 'pudding'], ['מעדן', 'pudding'], ['כרובית', 'cauliflower'], ['חרדל', 'mustard']];
+const ico = e => typeof e === 'string' && e.startsWith('svg:') ? `<img class="ico" src="icons/${e.slice(4).replace(/[^a-z]/g, '')}.svg" alt="">` : esc(e || '');
+function iconRaw(name, category) {
+  const n = String(name || '');
+  const s = SVG_ICONS.find(([k]) => n.includes(k));
+  if (s) return 'svg:' + s[1];
+  return catalogMatch(n)?.emo || CAT_ICON[category] || '🛒';
+}
+const iconFor = (name, category) => ico(iconRaw(name, category));
 function catOrder() {
   const saved = (S.household?.category_order || []).filter(c => CAT_ORDER.includes(c));
   return [...saved, ...CAT_ORDER.filter(c => !saved.includes(c))];
@@ -243,6 +253,7 @@ async function loadAll() {
   S.messages = [...ms.data, ...pendingMsgs.filter(p => !ms.data.some(x => x.id === p.id))];
   S.custom = cp.data; rebuildProducts();
   loadRecent(hid);
+  loadFamily(hid);
   saveCache();
   subscribe();
 }
@@ -279,6 +290,11 @@ function subscribe(force = false) {
       const { data } = await sb.from('members').select('user_id, display_name, color').eq('household_id', hid);
       if (data) { S.members = Object.fromEntries(data.map(x => [x.user_id, x])); render(); }
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'places', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'landings', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'landing_requests', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_lines', filter: f }, famReload)
     .on('broadcast', { event: 'heart' }, ({ payload }) => {
       if (payload?.to === S.user.id) { vibrate([60, 40, 60]); toast(nameOf(payload.from) + ' שלח/ה לך לב ❤'); }
     })
@@ -559,6 +575,7 @@ async function onForegroundPush(p) {
   if (p.kind === 'remind') { maybePromptConfirm(); return; }
   if (p.kind === 'trip' && S.trip && S.trip.shopper_id !== S.user.id) { showTripBanner(S.trip); return; }
   if (p.kind === 'thanks' || p.kind === 'test') { if (p.kind === 'test') toast(p.title + ' · ' + p.body); return; }
+  if (p.kind === 'land' || p.kind === 'delivery') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
   if (p.title) { vibrate(80); showInfoBanner({ title: p.title, body: p.body, act: p.kind === 'message' ? 'chat' : '' }); }
 }
 
@@ -750,8 +767,7 @@ function renderMain() {
   if (S.tab === 'stats') {
     body = renderStats();
   } else if (S.tab === 'family') {
-    body = `<div class="top"><div><div class="sub">${esc(S.household.name)}</div><h1>חדר משפחה</h1></div>${chatButton()}</div>
-      <div class="empty">כאן יהיו בקשות ("מישהו יכול להביא...") ורשימות נוספות:<br>בית מרקחת, תיקונים בבית, מתנות.<br><b>מגיע בגרסה 2.</b></div>`;
+    body = renderFamily();
   } else {
     const header = `<div class="top">
       <div><div class="sub">${esc(S.household.name)}</div><h1>רשימת הסופר</h1></div>
@@ -834,7 +850,7 @@ function renderMain() {
   const nav = `<nav class="tabs">
     <button class="${S.tab === 'list' ? 'active' : ''}" data-act="tab" data-tab="list">${I.list} סופר</button>
     <button class="${S.tab === 'stats' ? 'active' : ''}" data-act="tab" data-tab="stats">${I.stats} סטטיסטיקה</button>
-    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>משפחה <span class="soon">בקרוב</span></span></button>
+    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>משפחה${famAttention() ? '<span class="dot" aria-label="יש חדש"></span>' : ''}</span></button>
     <button data-act="settings">${I.gear} הגדרות</button>
   </nav>`;
   return `<div class="screen ${S.trip && S.tab === 'list' ? 'trip' : ''}">${body}</div>${nav}`;
@@ -873,7 +889,7 @@ function pickerHtml() {
     return `<div class="pk-row ${q ? 'on' : ''} ${has ? 'has' : ''}">
       <button class="pk-main" data-act="pick-toggle" data-name="${esc(name)}" ${has ? 'disabled' : ''} aria-pressed="${!!q}">
         <span class="pk-box">${I.check}</span>
-        <span class="pk-emo" aria-hidden="true">${emo}</span>
+        <span class="pk-emo" aria-hidden="true">${iconFor(name, cat.name === CUSTOM_TAB ? undefined : cat.name)}</span>
         <span class="pk-name">${esc(name)}</span>
         ${has ? '<span class="pk-has">כבר ברשימה</span>' : ''}
       </button>
@@ -915,7 +931,7 @@ async function saveCustomProduct(rawName) {
   const name = rawName.replace(/\s+/g, ' ').trim().slice(0, 60); if (!name) return false;
   if (productInfo(name)) { toast(name + ' כבר נמצא ברשימות'); return false; }
   const category = guessCategory(name);
-  const row = { household_id: S.household.id, name, emoji: iconFor(name, category), category, created_by: S.user.id };
+  const row = { household_id: S.household.id, name, emoji: iconRaw(name, category), category, created_by: S.user.id };
   const { data, error } = await sb.from('custom_products').insert(row).select().single();
   if (error) { toast(/duplicate|unique/i.test(error.message) ? name + ' כבר במוצרים שלנו' : 'לא הצלחתי לשמור'); return false; }
   if (!S.custom.some(c => c.id === data.id)) S.custom.push(data);
@@ -1195,6 +1211,264 @@ function showThanks(t) {
   vibrate([80, 60, 160]);
 }
 
+/* ---------------- family room: "נחיתה על הדרך" + "בדרך אלינו" ---------------- */
+const DEFAULT_PLACES = [['Yellow', 'fuel'], ['טיב טעם', 'super'], ['am:pm', 'super'], ['סופר יהודה', 'super'], ['סופר באבא', 'super'],
+  ['דלק · מנטה', 'fuel'], ['שופרסל אקספרס', 'super'], ['קרפור סיטי', 'super'], ['סופר־פארם', 'pharm'], ['פיצוציה', 'kiosk'], ['מאפייה', 'bakery'], ['מזנון', 'food']];
+const PLACE_ICON = {
+  fuel: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#FF7A1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M6 8h6M14 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg>',
+  pharm: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#12B76A" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg>',
+  bakery: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#C26A1E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11a4 4 0 0 1 3-6.5h8A4 4 0 0 1 19 11v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M9 9v3M12 8v3M15 9v3"/></svg>',
+  store: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#5B3DF5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8M10 21v-5h4v5"/></svg>'
+};
+const placeIcon = k => PLACE_ICON[k] || PLACE_ICON.store;
+const STAR = on => `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" fill="${on ? '#FFB020' : 'none'}" stroke="${on ? '#E08A00' : '#8B89A3'}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+const atPlace = p => /^[A-Za-z0-9]/.test(p) ? 'ב־' + p : 'ב' + p;
+const CONV_CATS = ['מקרר', 'מאפים', 'משקאות', SNACKS, 'מזווה', 'קפואים'];
+const DEL_SERVICES = ['Wolt', 'תן ביס', 'משלוחה', 'אחר'];
+const STEPS = [['open', 'פתוחה'], ['ordered', 'הוזמן'], ['onway', 'בדרך 🛵'], ['arrived', 'הגיע 🍕']];
+
+async function loadFamily(hid = S.household?.id) {
+  if (!hid) return;
+  const since = new Date(Date.now() - 7 * 864e5).toISOString();
+  const [pl, ld, dv] = await Promise.all([
+    sb.from('places').select('*').eq('household_id', hid),
+    sb.from('landings').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
+    sb.from('deliveries').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15)
+  ]);
+  if (pl.error || ld.error || dv.error) return;
+  const lids = ld.data.map(x => x.id), dids = dv.data.map(x => x.id);
+  const [rq, ln] = await Promise.all([
+    lids.length ? sb.from('landing_requests').select('*').in('landing_id', lids).order('created_at') : { data: [] },
+    dids.length ? sb.from('delivery_lines').select('*').in('delivery_id', dids).order('created_at') : { data: [] }
+  ]);
+  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], loaded: true };
+  if (S.tab === 'family' && !famTyping()) render();
+  if (S.sheetKind === 'landing') refreshLandingStars();
+}
+let famTimer = null;
+function famReload() { clearTimeout(famTimer); famTimer = setTimeout(() => loadFamily(), 250); }
+// don't redraw under someone's fingers while they type a request
+const famTyping = () => ['lreq-in', 'dline-in'].includes(document.activeElement?.id) && !!document.activeElement.value;
+
+const activeLanding = () => S.fam.landings.find(l => !l.ended_at && new Date(l.ends_at).getTime() > Date.now()) || null;
+const activeDelivery = () => S.fam.dels.find(d => ['open', 'ordered', 'onway'].includes(d.status)) || null;
+function allPlaces() {
+  const known = new Set(S.fam.places.map(p => p.name));
+  return [...S.fam.places, ...DEFAULT_PLACES.filter(([n]) => !known.has(n)).map(([name, kind]) => ({ name, kind, address: '', favorite: false }))];
+}
+const favPlaces = () => S.fam.places.filter(p => p.favorite).sort((a, b) => a.created_at < b.created_at ? -1 : 1);
+const famErr = e => toast(isNetErr(e) ? 'אין חיבור, נסו שוב בעוד רגע' : 'לא הצלחתי לשמור');
+
+async function land(name) {
+  name = String(name || '').trim().slice(0, 40); if (!name) return;
+  const p = allPlaces().find(x => x.name === name) || { name, kind: 'store', address: '' };
+  const mine = activeLanding();
+  if (mine && mine.user_id === S.user.id) await sb.from('landings').update({ ended_at: new Date().toISOString() }).eq('id', mine.id);
+  const { data, error } = await sb.from('landings').insert({ household_id: S.household.id, user_id: S.user.id, place: p.name, address: p.address || '', ends_at: new Date(Date.now() + 12 * 60000).toISOString() }).select().single();
+  if (error) return famErr(error);
+  if (!S.fam.places.some(x => x.name === p.name)) sb.from('places').upsert({ household_id: S.household.id, name: p.name, kind: p.kind, favorite: false }, { onConflict: 'household_id,name', ignoreDuplicates: true }).then(() => famReload());
+  S.fam.landings = [data, ...S.fam.landings.filter(l => l.id !== (mine && mine.id))];
+  closeSheet(); S.tab = 'family'; render(); vibrate(40);
+  toast(`נחתת ${atPlace(p.name)} · ${othersName()} קיבל/ה הודעה`);
+}
+async function savePlace(name, patch) {
+  const p = allPlaces().find(x => x.name === name) || { name, kind: 'store', address: '', favorite: false };
+  const row = { household_id: S.household.id, name, kind: p.kind || 'store', address: p.address || '', favorite: !!p.favorite, ...patch };
+  const { error } = await sb.from('places').upsert(row, { onConflict: 'household_id,name' });
+  if (error) { famErr(error); return false; }
+  const i = S.fam.places.findIndex(x => x.name === name);
+  if (i >= 0) S.fam.places[i] = { ...S.fam.places[i], ...row }; else S.fam.places.push({ ...row, created_at: new Date().toISOString() });
+  famReload(); return true;
+}
+async function landingPatch(patch) {
+  const L = activeLanding(); if (!L) return;
+  const { error } = await sb.from('landings').update(patch).eq('id', L.id);
+  if (error) return famErr(error);
+  Object.assign(L, patch); render();
+}
+async function requestOnLanding(body, itemId = null, done = false) {
+  const L = activeLanding(); if (!L || !body) return;
+  const row = { landing_id: L.id, household_id: S.household.id, user_id: S.user.id, body: body.slice(0, 120), item_id: itemId, done };
+  const { data, error } = await sb.from('landing_requests').insert(row).select().single();
+  if (error) return famErr(error);
+  S.fam.reqs.push(data); render(); vibrate(20);
+  toast(done ? 'נשלח ל' + nameOf(L.user_id) : 'הבקשה נשלחה ל' + nameOf(L.user_id));
+}
+async function requestDone(id) {
+  const r = S.fam.reqs.find(x => x.id === id); if (!r) return;
+  const { error } = await sb.from('landing_requests').update({ done: true }).eq('id', id);
+  if (error) return famErr(error);
+  r.done = true;
+  if (r.item_id && S.items.some(i => i.id === r.item_id)) deleteItem(r.item_id);  // bought on the way: off the supermarket list
+  render();
+}
+async function openDeliveryNow(fd) {
+  const service = DEL_SERVICES.includes(fd.service) ? fd.service : 'Wolt';
+  const mins = Math.min(60, Math.max(3, parseInt(fd.mins, 10) || 10));
+  const row = { household_id: S.household.id, opener_id: S.user.id, service: service === 'אחר' ? 'משלוח' : service,
+    vendor: String(fd.vendor || '').trim().slice(0, 60), status: 'open', closes_at: new Date(Date.now() + mins * 60000).toISOString(), updated_by: S.user.id };
+  const { data, error } = await sb.from('deliveries').insert(row).select().single();
+  if (error) return famErr(error);
+  S.fam.dels.unshift(data);
+  const mine = String(fd.mine || '').trim();
+  if (mine) await addDeliveryLine(data.id, mine, true);
+  closeSheet(); S.tab = 'family'; render();
+  toast('ההזמנה נפתחה · ' + othersName() + ' קיבל/ה הודעה');
+}
+async function addDeliveryLine(did, body, quiet = false) {
+  body = String(body || '').trim().slice(0, 200); if (!body) return;
+  const { data, error } = await sb.from('delivery_lines').insert({ delivery_id: did, household_id: S.household.id, user_id: S.user.id, body }).select().single();
+  if (error) return famErr(error);
+  S.fam.lines.push(data); if (!quiet) { render(); vibrate(20); }
+}
+async function deliveryPatch(id, patch) {
+  const d = S.fam.dels.find(x => x.id === id); if (!d) return;
+  patch = { ...patch, updated_by: S.user.id, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('deliveries').update(patch).eq('id', id);
+  if (error) return famErr(error);
+  Object.assign(d, patch); render();
+  if (patch.status === 'arrived') { vibrate([60, 40, 120]); toast('🍕 בתאבון!'); }
+}
+
+function landingCard() {
+  const favs = favPlaces();
+  return `<section class="fam-card land">
+    <div class="fam-h"><div><h2>נחיתה על הדרך</h2><p>עצרת בחנות? כולם יודעים ויכולים לבקש</p></div>
+      <img class="fam-ill" src="icons/land.svg" alt=""></div>
+    ${favs.length ? `<div class="fam-l">⭐ על הדרך שלי · לחיצה אחת ונחתת</div>
+      <div class="fav-grid">${favs.map(p => `<button class="fav" data-act="land" data-name="${esc(p.name)}">${placeIcon(p.kind)}<span>${esc(p.name)}</span></button>`).join('')}</div>`
+      : `<div class="fam-l">סמנו ⭐ את המקומות הקבועים שלכם, והם יופיעו כאן</div>`}
+    <button class="btn orange fam-btn" data-act="land-open">${favs.length ? 'נחתתי במקום אחר…' : 'נחתתי…'}</button>
+  </section>`;
+}
+function myLandingCard(L) {
+  const reqs = S.fam.reqs.filter(r => r.landing_id === L.id && r.user_id !== S.user.id);
+  return `<section class="fam-card land live">
+    <div class="fam-h"><div><h2>נחתת ${esc(atPlace(L.place))}</h2><p>${L.address ? esc(L.address) + ' · ' : ''}${esc(othersName())} יודע/ת · עד ${hhmm(L.ends_at)}</p></div>
+      <img class="fam-ill" src="icons/land.svg" alt=""></div>
+    <div class="reqs">${reqs.length ? reqs.map(r => `<div class="req ${r.done ? 'done' : ''}">
+        <span class="av sm" style="background:${colorOf(r.user_id)}">${esc(initial(r.user_id))}</span>
+        <span class="req-t">${r.item_id ? iconFor(r.body) + ' ' : ''}${esc(r.body)}</span>
+        ${r.done ? '<span class="req-ok">✓</span>' : `<button class="req-btn" data-act="lreq-done" data-id="${r.id}">קניתי ✓</button>`}
+      </div>`).join('') : `<div class="req-empty">עוד אין בקשות. ${esc(othersName())} קיבל/ה הודעה, ובקשות יופיעו כאן.</div>`}</div>
+    <div class="row2"><button class="btn ghost" data-act="land-more">עוד 5 דק׳</button><button class="btn orange" data-act="land-end">יצאתי מהחנות</button></div>
+  </section>`;
+}
+function theirLandingCard(L) {
+  const mine = S.fam.reqs.filter(r => r.landing_id === L.id && r.user_id === S.user.id);
+  const asked = new Set(mine.map(r => r.item_id).filter(Boolean));
+  const fromList = superItems().filter(i => !i.in_cart && !S.removing.has(i.id) && CONV_CATS.includes(i.category) && !asked.has(i.id)).slice(0, 8);
+  const left = Math.max(1, Math.ceil((new Date(L.ends_at).getTime() - Date.now()) / 60000));
+  const quick = [['לא צריך, תודה 👍', 1], ['משהו מתוק 🍫', 0], ['שתייה קרה 🥤', 0], ['קפה ☕', 0]];
+  return `<section class="fam-card land live">
+    <div class="fam-h"><div><h2>${esc(nameOf(L.user_id))} נחת/ה ${esc(atPlace(L.place))}</h2><p>${L.address ? esc(L.address) + ' · ' : ''}לפני ${minsSince(L.created_at) || 'פחות מ־1'} דק׳ · עוד כ־${left} דק׳ שם</p></div>
+      <img class="fam-ill" src="icons/land.svg" alt=""></div>
+    <div class="fam-l">בקשה מהירה</div>
+    <div class="qchips">${quick.map(([t, d]) => `<button class="qchip" data-act="lreq" data-body="${esc(t)}" data-done="${d}">${esc(t)}</button>`).join('')}</div>
+    ${fromList.length ? `<div class="fam-l">מהרשימה שלכם, שאולי יש גם שם</div>
+      <div class="reqs">${fromList.map(i => `<div class="req"><span class="req-e" aria-hidden="true">${iconFor(i.name, i.category)}</span><span class="req-t">${esc(i.name)}${i.qty && i.qty !== '1' ? ' · ' + esc(i.qty) : ''}</span>
+        <button class="req-btn" data-act="lreq-item" data-id="${i.id}">לבקש</button></div>`).join('')}</div>` : ''}
+    ${mine.length ? `<div class="fam-l">ביקשת</div><div class="reqs">${mine.map(r => `<div class="req ${r.done ? 'done' : ''}"><span class="req-t">${esc(r.body)}</span><span class="req-ok">${r.done ? (r.item_id || !/לא צריך/.test(r.body) ? '✓ נקנה' : '✓') : 'נשלח'}</span></div>`).join('')}</div>` : ''}
+    <form class="inline-form" data-form="lreq"><label for="lreq-in" class="sr">מה להביא</label>
+      <input id="lreq-in" name="text" maxlength="120" autocomplete="off" placeholder="משהו אחר? למשל: קרח, סוללות" required>
+      <button class="btn violet send" type="submit">שליחה</button></form>
+  </section>`;
+}
+function deliveryPromo() {
+  return `<section class="fam-card del">
+    <div class="fam-h"><div><h2>בדרך אלינו</h2><p>מזמינים הביתה? פותחים הזמנה וכולם מצטרפים</p></div>
+      <img class="fam-ill" src="icons/deliver.svg" alt=""></div>
+    <button class="btn violet fam-btn" data-act="del-open">פתיחת הזמנה</button>
+  </section>`;
+}
+function deliveryCard(D) {
+  const mine = D.opener_id === S.user.id;
+  const lines = S.fam.lines.filter(l => l.delivery_id === D.id);
+  const left = Math.ceil((new Date(D.closes_at).getTime() - Date.now()) / 60000);
+  const idx = STEPS.findIndex(([k]) => k === D.status);
+  let acts = '';
+  if (D.status === 'open' && mine) acts = `<button class="btn green" data-act="del-status" data-id="${D.id}" data-s="ordered">סגרתי והזמנתי ✓</button>
+      <div class="row2"><button class="btn ghost" data-act="del-more" data-id="${D.id}">עוד 5 דק׳ ⏳</button><button class="btn ghost danger-t" data-act="del-status" data-id="${D.id}" data-s="cancelled">ביטול ההזמנה</button></div>`;
+  else if (D.status === 'ordered') acts = `<div class="row2"><button class="btn ghost" data-act="del-status" data-id="${D.id}" data-s="onway">יצא לדרך 🛵</button><button class="btn green" data-act="del-status" data-id="${D.id}" data-s="arrived">הגיע 🍕</button></div>`;
+  else if (D.status === 'onway') acts = `<button class="btn green" data-act="del-status" data-id="${D.id}" data-s="arrived">הגיע 🍕</button>`;
+  const when = D.status !== 'open' ? '' : left > 0 ? `<span class="pill">⏳ מצטרפים עד ${hhmm(D.closes_at)} · עוד ${left} דק׳</span>` : `<span class="pill">⏳ זמן ההצטרפות עבר · ${mine ? 'אפשר לסגור ולהזמין' : 'עוד אפשר להוסיף עד שההזמנה נסגרת'}</span>`;
+  return `<section class="fam-card del live">
+    <div class="fam-h"><div><p class="who">${mine ? 'פתחת הזמנה' : esc(nameOf(D.opener_id)) + ' פתח/ה הזמנה'}</p><h2>${esc(D.service)}${D.vendor ? ' · ' + esc(D.vendor) : ''}</h2>${when}</div>
+      <img class="fam-ill" src="icons/deliver.svg" alt=""></div>
+    <ol class="steps">${STEPS.map(([k, t], i) => `<li class="${i <= idx ? 'on' : ''}"><span></span>${t}</li>`).join('')}</ol>
+    <div class="reqs">${lines.length ? lines.map(l => `<div class="req"><span class="av sm" style="background:${colorOf(l.user_id)}">${esc(initial(l.user_id))}</span>
+        <span class="req-t"><b>${esc(nameOf(l.user_id))}</b> ${esc(l.body)}</span>
+        ${l.user_id === S.user.id && D.status === 'open' ? `<button class="req-x" data-act="dline-del" data-id="${l.id}" aria-label="הסרה">${I.x}</button>` : ''}</div>`).join('')
+      : '<div class="req-empty">עוד אף אחד לא הוסיף. מה מזמינים?</div>'}</div>
+    ${D.status === 'open' ? `<form class="inline-form" data-form="dline" data-id="${D.id}"><label for="dline-in" class="sr">מה להוסיף להזמנה</label>
+      <input id="dline-in" name="text" maxlength="200" autocomplete="off" placeholder="מה את/ה רוצה? למשל: צ׳יפס גדול" required>
+      <button class="btn violet send" type="submit">${lines.some(l => l.user_id === S.user.id) ? 'הוספה' : 'הצטרפות'}</button></form>` : ''}
+    ${acts}
+  </section>`;
+}
+function familyFeed() {
+  const L = activeLanding(), D = activeDelivery();
+  const ev = [
+    ...S.fam.landings.filter(l => l !== L).map(l => ({ t: l.created_at, html: `🏍️ ${esc(nameOf(l.user_id))} נחת/ה ${esc(atPlace(l.place))}` + (() => { const n = S.fam.reqs.filter(r => r.landing_id === l.id && r.user_id !== l.user_id && !/לא צריך/.test(r.body)).length; return n ? ` · ${n} בקשות` : ''; })() })),
+    ...S.fam.dels.filter(d => d !== D && d.status !== 'cancelled').map(d => ({ t: d.created_at, html: `🍕 משלוח מ${esc(d.service)}${d.vendor ? ' · ' + esc(d.vendor) : ''}` }))
+  ].sort((a, b) => a.t < b.t ? 1 : -1).slice(0, 5);
+  if (!ev.length) return '';
+  return `<section class="card pad fam-feed"><h3>לאחרונה</h3>${ev.map(e => `<div>${e.html} · <span class="muted">${relDay(e.t)} ${hhmm(e.t)}</span></div>`).join('')}</section>`;
+}
+function renderFamily() {
+  const L = activeLanding(), D = activeDelivery();
+  const top = `<div class="top"><div><div class="sub">${esc(S.household.name)}</div><h1>חדר משפחה</h1></div>${chatButton()}</div>`;
+  if (!S.fam.loaded) return top + '<div class="empty">טוען…</div>';
+  return top + `<div class="fam">
+    ${D ? deliveryCard(D) : ''}
+    ${L ? (L.user_id === S.user.id ? myLandingCard(L) : theirLandingCard(L)) : ''}
+    ${L && L.user_id === S.user.id ? '' : landingCard()}
+    ${D ? '' : deliveryPromo()}
+    ${familyFeed()}
+  </div>`;
+}
+const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
+
+function landingSheetHtml() {
+  const favs = favPlaces(), favNames = new Set(favs.map(p => p.name));
+  const rest = allPlaces().filter(p => !favNames.has(p.name));
+  return `${sheetHead('איפה נחתת?')}
+    <form class="land-q" data-form="land-new"><label for="land-q" class="sr">חיפוש או מקום חדש</label>
+      <input id="land-q" name="q" maxlength="40" autocomplete="off" placeholder="חיפוש, או שם של מקום חדש">
+      <button class="btn orange send" type="submit">נחתתי</button></form>
+    ${favs.length ? `<div class="fam-l o">⭐ על הדרך שלי</div><div class="pl-list">${favs.map(p => `<div class="pl-row" data-pn="${esc(p.name)}">
+        <button class="pl-main" data-act="land" data-name="${esc(p.name)}"><span class="pl-i">${placeIcon(p.kind)}</span><span><b>${esc(p.name)}</b><small>${p.address ? esc(p.address) : 'הוספת כתובת ✎'}</small></span></button>
+        <button class="pl-ed" data-act="place-edit" data-name="${esc(p.name)}" aria-label="כתובת של ${esc(p.name)}">✎</button>
+        <button class="pl-star" data-act="fav" data-name="${esc(p.name)}" aria-label="הסרה מהמועדפים">${STAR(true)}</button></div>`).join('')}</div>` : ''}
+    <div class="fam-l">עוד מקומות · ☆ מוסיף ל"על הדרך שלי"</div>
+    <div class="pl-grid">${rest.map(p => `<div class="pl-cell" data-pn="${esc(p.name)}"><button class="pl-main" data-act="land" data-name="${esc(p.name)}">${esc(p.name)}</button>
+      <button class="pl-star" data-act="fav" data-name="${esc(p.name)}" aria-label="הוספה למועדפים">${STAR(false)}</button></div>`).join('')}</div>`;
+}
+function openLanding() { openSheet(landingSheetHtml(), 'tall scroll', 'landing'); }
+function refreshLandingStars() { if (S.sheetKind === 'landing' && !document.getElementById('land-q')?.value) setSheet(landingSheetHtml()); }
+function filterPlaces(q) {
+  q = q.trim();
+  sheetRoot.querySelectorAll('[data-pn]').forEach(el => { el.hidden = !!q && !el.dataset.pn.includes(q) && !el.dataset.pn.toLowerCase().includes(q.toLowerCase()); });
+}
+function openPlaceEdit(name) {
+  const p = allPlaces().find(x => x.name === name) || { name, address: '' };
+  openSheet(`${sheetHead(esc(p.name))}
+    <form data-form="place" data-name="${esc(p.name)}" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field"><label for="pl-a">כתובת או סניף (מופיע בהודעה)</label><input id="pl-a" name="address" maxlength="60" value="${esc(p.address || '')}" placeholder="למשל: בבלי 17"></div>
+      <button class="btn violet" type="submit">שמירה</button></form>
+    <button class="btn ghost" data-act="land-open">חזרה</button>`, '', 'place');
+}
+function openDeliveryForm() {
+  openSheet(`${sheetHead('פתיחת הזמנה')}
+    <form data-form="del-new" style="display:flex;flex-direction:column;gap:14px">
+      <fieldset class="seg"><legend>מאיפה מזמינים</legend>${DEL_SERVICES.map((s, i) => `<label><input type="radio" name="service" value="${s}" ${i ? '' : 'checked'}><span>${s}</span></label>`).join('')}</fieldset>
+      <div class="field"><label for="dv-v">מסעדה או חנות</label><input id="dv-v" name="vendor" maxlength="60" placeholder="למשל: הפיצרייה בשכונה" autocomplete="off"></div>
+      <fieldset class="seg"><legend>מצטרפים במשך</legend>${[5, 10, 15, 20].map(m => `<label><input type="radio" name="mins" value="${m}" ${m === 10 ? 'checked' : ''}><span>${m} דק׳</span></label>`).join('')}</fieldset>
+      <div class="field"><label for="dv-m">מה את/ה מזמין/ה (לא חובה)</label><input id="dv-m" name="mine" maxlength="200" autocomplete="off" placeholder="למשל: פיצה משפחתית חצי זיתים"></div>
+      <button class="btn violet" type="submit">פתיחה ושליחה ל${esc(othersName())}</button>
+    </form>`, 'tall scroll', 'delivery');
+}
+
 /* ---------------- events ---------------- */
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1299,6 +1573,20 @@ document.addEventListener('click', async e => {
     }
     case 'tab': S.tab = b.dataset.tab; render(); if (S.tab === 'stats') loadStats(); window.scrollTo(0, 0); break;
     case 'settings': openSettings(); break;
+    case 'go-family': document.getElementById('banner')?.remove(); S.tab = 'family'; render(); window.scrollTo(0, 0); break;
+    case 'land-open': openLanding(); break;
+    case 'land': land(b.dataset.name); break;
+    case 'fav': { const p = allPlaces().find(x => x.name === b.dataset.name); if (p && await savePlace(p.name, { favorite: !p.favorite })) { if (S.sheetKind === 'landing') setSheet(landingSheetHtml()); render(); } break; }
+    case 'place-edit': openPlaceEdit(b.dataset.name); break;
+    case 'land-more': { const L = activeLanding(); if (L) landingPatch({ ends_at: new Date(Math.max(Date.now(), new Date(L.ends_at).getTime()) + 5 * 60000).toISOString() }); break; }
+    case 'land-end': landingPatch({ ended_at: new Date().toISOString() }).then(() => toast('תודה! הנחיתה נסגרה')); break;
+    case 'lreq': requestOnLanding(b.dataset.body, null, b.dataset.done === '1'); break;
+    case 'lreq-item': { const it = S.items.find(i => i.id === b.dataset.id); if (it) requestOnLanding(it.name + (it.qty && it.qty !== '1' ? ' ×' + it.qty : ''), it.id); break; }
+    case 'lreq-done': requestDone(b.dataset.id); break;
+    case 'del-open': openDeliveryForm(); break;
+    case 'del-status': deliveryPatch(b.dataset.id, { status: b.dataset.s }); break;
+    case 'del-more': { const d = S.fam.dels.find(x => x.id === b.dataset.id); if (d) deliveryPatch(d.id, { closes_at: new Date(Math.max(Date.now(), new Date(d.closes_at).getTime()) + 5 * 60000).toISOString() }); break; }
+    case 'dline-del': { const { error } = await sb.from('delivery_lines').delete().eq('id', b.dataset.id); if (error) famErr(error); else { S.fam.lines = S.fam.lines.filter(l => l.id !== b.dataset.id); render(); } break; }
     case 'share-code': {
       const txt = `הצטרפי אליי לרשימת הקניות שלנו ב"בדרך לסופר" 🛒\nקוד הבית: ${S.household.invite_code}\n${location.origin + location.pathname}`;
       if (navigator.share) { try { await navigator.share({ text: txt }); } catch {} }
@@ -1309,13 +1597,18 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('input', e => { if (e.target.id === 'add-input') S.addText = e.target.value; });
+document.addEventListener('input', e => { if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); });
 
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]'); if (!f) return;
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(f));
   switch (f.dataset.form) {
+    case 'land-new': { const q = String(fd.q || '').trim(); if (q) land(allPlaces().find(p => p.name === q)?.name || q); break; }
+    case 'place': if (await savePlace(f.dataset.name, { address: String(fd.address || '').trim().slice(0, 60) })) { toast('נשמר'); openLanding(); } break;
+    case 'lreq': { const t = String(fd.text || '').trim(); if (t) { f.reset(); requestOnLanding(t); } break; }
+    case 'del-new': openDeliveryNow(fd); break;
+    case 'dline': { const t = String(fd.text || '').trim(); if (t) { f.reset(); addDeliveryLine(f.dataset.id, t); } break; }
     case 'add': {
       const v = S.addText.trim(); if (!v) return;
       S.addText = ''; addItem(v);
@@ -1413,6 +1706,7 @@ async function handleOpen(params) {
   if (!params || !S.household) return;
   if (params.get('confirm') && iShop()) { LS.set('ha_prompted', S.trip.id + '|' + S.trip.remind_at); openConfirm(true); }
   else if (params.get('chat')) openChat();
+  else if (params.get('family')) { S.tab = 'family'; render(); loadFamily(); }
   else if (params.get('thanks')) {
     const { data } = await sb.from('trips').select('*').eq('id', params.get('thanks')).maybeSingle();
     if (data) showThanks(data);
@@ -1450,6 +1744,7 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => {
   if (iShop()) maybePromptConfirm();
   if (S.trip && !sheetRoot.innerHTML && !S.removing.size && document.activeElement?.id !== 'add-input') render(); // keep the minutes counter fresh
+  else if (S.tab === 'family' && !sheetRoot.innerHTML && !famTyping() && S.fam.loaded) render();
 }, 15000);
 
 setInterval(() => {

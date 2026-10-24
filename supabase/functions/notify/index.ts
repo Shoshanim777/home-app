@@ -113,6 +113,60 @@ async function serverEvent(type: string, id: string) {
     return pushTo(await othersInHousehold(m.household_id, m.sender_id), {
       title: `💬 ${m.display_name}`, body: text, tag: 'msg', url: APP_URL + '?chat=1', kind: 'message', badge: 'badge-chat.png' });
   }
+  return familyEvent(type, id);
+}
+
+// ---- family room: "נחיתה על הדרך" and "בדרך אלינו" ----
+const IL_TIME = (t: string | Date) => new Date(t).toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' });
+const nameIn = async (hid: string, uid: string) =>
+  ((await sql`select display_name from public.members where household_id = ${hid} and user_id = ${uid}`)[0]?.display_name as string) || 'מישהו';
+const at = (place: string) => /^[A-Za-z0-9]/.test(place) ? `ב־${place}` : `ב${place}`;
+
+async function familyEvent(type: string, id: string) {
+  const LAND = { icon: 'notif-land.png', badge: 'badge-moto.png', kind: 'land' };
+  const DEL = { icon: 'notif-deliver.png', badge: 'badge-pizza.png', kind: 'delivery' };
+  if (type === 'landing') {
+    const [l] = await sql`select * from public.landings where id = ${id}`;
+    if (!l) return { sent: 0 };
+    const who = await nameIn(l.household_id, l.user_id);
+    return pushTo(await othersInHousehold(l.household_id, l.user_id), {
+      title: `🏍️ ${who} נחת/ה הרגע ${at(l.place)}`, body: (l.address ? l.address + ' · ' : '') + 'צריך משהו? אפשר לבקש עכשיו',
+      tag: 'land-' + id, url: APP_URL + '?family=land', ...LAND });
+  }
+  if (type === 'landing_req') {
+    const [r] = await sql`select r.*, l.user_id lander, l.place from public.landing_requests r join public.landings l on l.id = r.landing_id where r.id = ${id}`;
+    if (!r || r.user_id === r.lander) return { sent: 0 };
+    const who = await nameIn(r.household_id, r.user_id);
+    return pushTo([r.lander], { title: `🛍️ ${who} ${r.done ? 'עונה' : 'מבקש/ת'}`, body: r.body, tag: 'landreq-' + r.landing_id, url: APP_URL + '?family=land', ...LAND });
+  }
+  if (type === 'delivery_open') {
+    const [d] = await sql`select * from public.deliveries where id = ${id}`;
+    if (!d) return { sent: 0 };
+    const who = await nameIn(d.household_id, d.opener_id);
+    return pushTo(await othersInHousehold(d.household_id, d.opener_id), {
+      title: `🛵 ${who} פותח/ת הזמנה מ${d.service}`, body: (d.vendor ? d.vendor + ' · ' : '') + `מצטרפים עד ${IL_TIME(d.closes_at)}`,
+      tag: 'del-' + id, url: APP_URL + '?family=delivery', ...DEL });
+  }
+  if (type === 'delivery_line') {
+    const [x] = await sql`select x.*, d.opener_id from public.delivery_lines x join public.deliveries d on d.id = x.delivery_id where x.id = ${id}`;
+    if (!x || x.user_id === x.opener_id) return { sent: 0 };
+    const who = await nameIn(x.household_id, x.user_id);
+    return pushTo([x.opener_id], { title: `🍕 ${who} הצטרף/ה להזמנה`, body: x.body, tag: 'delline-' + x.delivery_id, url: APP_URL + '?family=delivery', ...DEL });
+  }
+  if (type === 'delivery_status') {
+    const [d] = await sql`select * from public.deliveries where id = ${id}`;
+    if (!d) return { sent: 0 };
+    const by = d.updated_by || d.opener_id;
+    const who = await nameIn(d.household_id, by);
+    const msg: Record<string, [string, string]> = {
+      ordered: [`✅ ${who} הזמין/ה מ${d.service}`, (d.vendor ? d.vendor + ' · ' : '') + 'ההזמנה נסגרה, עכשיו מחכים'],
+      onway: ['🛵 המשלוח בדרך אלינו', (d.vendor || d.service) + ' · עוד מעט כאן'],
+      arrived: ['🍕 המשלוח הגיע!', 'בתאבון 😋'],
+      cancelled: [`ההזמנה מ${d.service} בוטלה`, `${who} ביטל/ה את ההזמנה`]
+    };
+    const m = msg[d.status]; if (!m) return { sent: 0 };
+    return pushTo(await othersInHousehold(d.household_id, by), { title: m[0], body: m[1], tag: 'del-' + id, url: APP_URL + '?family=delivery', ...DEL });
+  }
   return { sent: 0 };
 }
 
@@ -143,7 +197,9 @@ async function weekly() {
       (select count(distinct household_id) from (
           select household_id from public.items where created_at > now() - interval '7 days'
           union all select household_id from public.trips where started_at > now() - interval '7 days'
-          union all select household_id from public.purchases where created_at > now() - interval '7 days') x
+          union all select household_id from public.purchases where created_at > now() - interval '7 days'
+          union all select household_id from public.landings where created_at > now() - interval '7 days'
+          union all select household_id from public.deliveries where created_at > now() - interval '7 days') x
         where household_id <> ${ex})::int active,
       (select count(*) from public.trips where status = 'done' and finished_at > now() - interval '7 days' and household_id <> ${ex})::int trips,
       (select count(*) from public.members where joined_at > now() - interval '7 days' and household_id <> ${ex})::int joined`;
