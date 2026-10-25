@@ -656,6 +656,7 @@ const app = document.getElementById('app');
 function render() {
   document.body.classList.toggle('trip-mode', !!(S.trip && S.household && S.tab === 'list'));
   if (S.booting) { app.innerHTML = ''; return; }
+  if (S.suspended) return renderSuspended();
   if (!S.session) return renderAuth();
   if (!S.household) return renderOnboard();
   const focused = document.activeElement?.id === 'add-input';
@@ -781,7 +782,9 @@ function renderMain() {
   const listB = basket(items.filter(i => !i.in_cart));
 
   let body = '';
-  if (S.tab === 'stats') {
+  if (S.tab === 'admin') {
+    body = renderAdmin();
+  } else if (S.tab === 'stats') {
     body = renderStats();
   } else if (S.tab === 'family') {
     body = renderFamily();
@@ -1074,6 +1077,7 @@ function settingsHtml() {
       <div class="field" style="flex:1"><label for="mn">השם שלי</label><input id="mn" name="display" value="${esc(m?.display_name || '')}" maxlength="20" required></div>
       <button class="btn violet" type="submit" style="flex:0 0 100px;height:52px;font-size:16px">עדכון</button>
     </form>
+    ${S.isAdmin ? '<button class="btn ghost" data-act="admin-open">🛡️ ניהול משתמשים</button>' : ''}
     <a class="btn ghost" href="guide.html" style="text-decoration:none;display:flex;align-items:center;justify-content:center">📖 מדריך שימוש</a>
     <div style="font-size:13px;color:var(--muted)">מחובר/ת בתור ${esc(S.user.email)}</div>
     <button class="danger" data-act="signout">יציאה מהמשתמש</button>`;
@@ -1605,6 +1609,96 @@ function updateAskHint(v) {
   h.hidden = !show; if (show) document.getElementById('ask-hint-t').textContent = v.trim();
 }
 
+/* ---------------- owner's user management (server checks it's really the owner) ---------------- */
+async function loadStatus() {
+  const { data, error } = await sb.rpc('my_status');
+  if (error || !data) return;
+  S.isAdmin = !!data.admin; S.suspended = !!data.suspended;
+}
+function renderSuspended() {
+  app.innerHTML = `<div class="auth suspended">
+    <span class="sus-ico"><svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" fill="none" stroke="#5E5C78" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg></span>
+    <h1>החשבון הושהה</h1>
+    <p>הגישה לאפליקציה מהמשתמש הזה הופסקה זמנית.<br>לפרטים אפשר לפנות לדותן, שמנהל את "בדרך לסופר".</p>
+    ${S.suspendedEmail || S.user?.email ? `<p class="small muted" dir="ltr">${esc(S.suspendedEmail || S.user.email)}</p>` : ''}
+    <button class="btn ghost" data-act="suspended-out">יציאה</button>
+  </div>`;
+}
+async function adminCall(action, extra = {}) {
+  try { return await notifyOnce(action, extra); } catch (e) { return { error: isNetErr(e) ? 'אין חיבור' : (e.message || 'שגיאה') }; }
+}
+async function loadAdmin() {
+  S.adm = { ...(S.adm || {}), loading: true }; render();
+  const r = await adminCall('admin_list');
+  if (r.error) { S.adm = { ...(S.adm || {}), loading: false }; toast(r.error === 'forbidden' ? 'אין הרשאה' : 'לא הצלחתי לטעון'); render(); return; }
+  S.adm = { users: r.users || [], mine: r.myHousehold, admin: r.admin, filter: S.adm?.filter || 'all', loading: false };
+  render();
+}
+const ADM_WEEK = 7 * 864e5;
+const admActive = u => u.last_active && Date.now() - new Date(u.last_active).getTime() < ADM_WEEK;
+function admWhen(t) {
+  if (!t) return 'אף פעם';
+  const ms = Date.now() - new Date(t).getTime();
+  if (ms < 15 * 60e3) return 'עכשיו';
+  const d = relDay(t); return d === 'היום' ? 'היום, ' + hhmm(t) : d;
+}
+function renderAdmin() {
+  const A = S.adm || {};
+  const head = `<div class="top"><div><div class="sub">🔒 רק אתה רואה את המסך הזה</div><h1>ניהול משתמשים</h1></div>
+    <button class="adm-ref" data-act="admin-refresh" aria-label="רענון">↻</button></div>`;
+  if (!A.users) return head + '<div class="empty">טוען…</div>';
+  const us = A.users;
+  const homes = new Set(us.filter(u => u.household_id).map(u => u.household_id)).size;
+  const f = A.filter;
+  const pass = u => f === 'all' || (f === 'active' && admActive(u) && !u.suspended_at) || (f === 'idle' && !admActive(u) && !u.suspended_at) || (f === 'sus' && u.suspended_at);
+  const groups = new Map();
+  for (const u of us) { if (!pass(u)) continue; const k = u.household_id || 'none'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+  const order = [...groups.keys()].sort((a, b) => (b === A.mine) - (a === A.mine) || (a === 'none') - (b === 'none'));
+  const row = (u, mine) => {
+    const status = u.suspended_at ? '<span class="adm-st sus">מושהה</span>'
+      : `<span class="adm-st ${admActive(u) ? 'on' : ''}">${admActive(u) ? '● ' : ''}${admWhen(u.last_active)}</span>`;
+    const act = mine ? '' : u.suspended_at ? `<button class="adm-btn green" data-act="admin-restore" data-id="${u.id}">החזרה</button>`
+      : `<button class="adm-more" data-act="admin-user" data-id="${u.id}" aria-label="פעולות ל${esc(u.email)}">⋯</button>`;
+    return `<div class="adm-row ${u.suspended_at ? 'sus' : ''}">
+      <span class="av sm2" style="background:${u.suspended_at ? '#B5B2C8' : (u.color || '#DCDAE8')}">${esc((u.display_name || u.email || '?').charAt(0))}</span>
+      <span class="adm-t"><b>${esc(u.display_name || 'בלי שם')}${u.id === A.admin ? ' · מנהל' : ''}</b><small dir="ltr">${esc(u.email)}</small></span>${status}${act}</div>`;
+  };
+  return head + `<div class="adm">
+    <div class="adm-kpis"><div><b>${homes}</b><span>בתים</span></div><div><b>${us.length}</b><span>משתמשים</span></div><div class="g"><b>${us.filter(u => admActive(u) && !u.suspended_at).length}</b><span>פעילים השבוע</span></div></div>
+    <div class="chips adm-f">${[['all', 'הכול'], ['active', 'פעילים'], ['idle', 'רדומים'], ['sus', 'מושהים']].map(([k, t]) => `<button class="chip ${f === k ? 'pick' : ''}" data-act="admin-filter" data-f="${k}">${t}</button>`).join('')}</div>
+    ${order.length ? order.map(k => {
+      const list = groups.get(k), u0 = list[0], mine = k === A.mine;
+      const title = k === 'none' ? 'בלי בית · נרשמו ולא המשיכו' : '🏠 ' + esc(u0.house || 'בית');
+      return `<section class="card adm-h"><div class="adm-hh ${mine ? 'mine' : ''}"><b>${title}</b><span>${mine ? 'הבית שלך' : k === 'none' ? '' : 'נפתח ' + relDay(u0.house_created)}</span></div>
+        ${list.map(u => row(u, mine || u.id === A.admin)).join('')}</section>`;
+    }).join('') : '<div class="empty">אין משתמשים בסינון הזה</div>'}
+  </div>`;
+}
+function openAdminUser(id) {
+  const u = (S.adm?.users || []).find(x => x.id === id); if (!u) return;
+  const d = t => t ? new Date(t).toLocaleDateString('he-IL') : '—';
+  openSheet(`${sheetHead(esc(u.display_name || 'משתמש'))}
+    <div class="muted" dir="ltr" style="text-align:right;margin-top:-8px">${esc(u.email)}</div>
+    <div class="adm-facts"><div><span>בית</span><b>${esc(u.house || 'אין')}</b></div><div><span>נרשם</span><b>${d(u.created_at)}</b></div>
+      <div><span>פעילות אחרונה</span><b>${admWhen(u.last_active)}</b></div><div><span>מייל</span><b class="${u.email_confirmed_at ? 'okc' : ''}">${u.email_confirmed_at ? 'אומת ✓' : 'לא אומת'}</b></div></div>
+    <div class="adm-note"><b>⏸ השהיית המשתמש</b><span>המשתמש ינותק מיד ולא יוכל להיכנס.</span><span>הנתונים שלו לא נמחקים, ו"החזרה" מחזירה הכול.</span><span>שאר בני הבית שלו ממשיכים כרגיל.</span></div>
+    <form data-form="admin-suspend" data-id="${u.id}" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field"><label for="adm-why">סיבה (רק בשבילך, לא נשלחת אליו)</label><input id="adm-why" name="reason" maxlength="200" placeholder="לא חובה" autocomplete="off"></div>
+      <button class="btn danger-b" type="submit">השהיית ${esc(u.display_name || u.email)}</button>
+    </form>
+    <button class="btn ghost" data-act="backdrop-close">ביטול</button>`, 'tall scroll', 'admin-user');
+}
+async function adminSuspend(id, reason) {
+  const r = await adminCall('admin_suspend', { uid: id, reason });
+  if (r.error) return toast(r.error === 'forbidden' ? 'אין הרשאה' : r.error);
+  closeSheet(); toast('המשתמש הושהה'); loadAdmin();
+}
+async function adminRestore(id) {
+  const r = await adminCall('admin_restore', { uid: id });
+  if (r.error) return toast(r.error);
+  toast('המשתמש הוחזר ✓'); loadAdmin();
+}
+
 /* ---------------- events ---------------- */
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1716,6 +1810,12 @@ document.addEventListener('click', async e => {
     }
     case 'tab': S.tab = b.dataset.tab; render(); if (S.tab === 'stats') loadStats(); window.scrollTo(0, 0); break;
     case 'settings': openSettings(); break;
+    case 'admin-open': closeSheet(); S.tab = 'admin'; render(); window.scrollTo(0, 0); loadAdmin(); break;
+    case 'admin-refresh': loadAdmin(); break;
+    case 'admin-filter': S.adm.filter = b.dataset.f; render(); break;
+    case 'admin-user': openAdminUser(b.dataset.id); break;
+    case 'admin-restore': adminRestore(b.dataset.id); break;
+    case 'suspended-out': S.suspended = false; S.suspendedEmail = null; await sb.auth.signOut(); render(); break;
     case 'go-family': document.getElementById('banner')?.remove(); S.tab = 'family'; render(); window.scrollTo(0, 0); break;
     case 'land-open': openLanding(); break;
     case 'land': land(b.dataset.name); break;
@@ -1761,6 +1861,7 @@ document.addEventListener('submit', async e => {
     case 'lreq': { const t = String(fd.text || '').trim(); if (t) { f.reset(); requestOnLanding(t); } break; }
     case 'del-new': openDeliveryNow(fd); break;
     case 'ask': newAsk(fd); break;
+    case 'admin-suspend': adminSuspend(f.dataset.id, String(fd.reason || '').trim()); break;
     case 'dline': { const t = String(fd.text || '').trim(); if (t) { f.reset(); addDeliveryLine(f.dataset.id, t); } break; }
     case 'add': {
       const v = S.addText.trim(); if (!v) return;
@@ -1775,7 +1876,8 @@ document.addEventListener('submit', async e => {
         ? await sb.auth.signUp({ email, password: fd.password, options: { emailRedirectTo: APP_HOME } })
         : await sb.auth.signInWithPassword({ email, password: fd.password });
       S.busy = false;
-      if (error && /Email not confirmed/i.test(error.message || '')) { S.verifyEmail = email; S.authErr = 'עוד לא אישרת את הכתובת. הקישור נמצא במייל.'; LS.set('ha_verify', email); }
+      if (error && /banned/i.test(error.message || '')) { S.suspended = true; S.suspendedEmail = email; }
+      else if (error && /Email not confirmed/i.test(error.message || '')) { S.verifyEmail = email; S.authErr = 'עוד לא אישרת את הכתובת. הקישור נמצא במייל.'; LS.set('ha_verify', email); }
       else if (error) S.authErr = hebAuthErr(error);
       else if (S.authMode === 'signup' && !data.session) { S.verifyEmail = email; S.authErr = ''; LS.set('ha_verify', email); }
       render();
@@ -1876,6 +1978,8 @@ navigator.serviceWorker?.addEventListener('message', e => {
 
 /* ---------------- lifecycle ---------------- */
 async function safeLoad() {
+  try { await loadStatus(); } catch {}
+  if (S.suspended) { render(); return; }
   try { await loadAll(); } catch (e) { if (!isNetErr(e)) toast('שגיאה בטעינה: ' + (e.message || '')); }
   render();
 }

@@ -44,7 +44,8 @@ const ILS = (n: number) => '₪' + (Math.round(n * 100) / 100).toLocaleString('h
 async function pushTo(userIds: string[], payload: Payload) {
   if (!userIds.length) { console.log(JSON.stringify({ kind: payload.kind, users: 0 })); return { sent: 0 }; }
   await vapid();
-  const subs = await sql`select endpoint, p256dh, auth from public.push_subscriptions where user_id in ${sql(userIds)}`;
+  const subs = await sql`select endpoint, p256dh, auth from public.push_subscriptions
+    where user_id in ${sql(userIds)} and user_id not in (select user_id from public.suspensions)`;
   let sent = 0;
   await Promise.all(subs.map(async (s) => {
     try {
@@ -245,6 +246,49 @@ async function weekly() {
   return pushTo([admin], { title: '📊 השבוע ב"בדרך לסופר"', body, tag: 'weekly', kind: 'admin', badge: 'badge-check.png', url: APP_URL });
 }
 
+// ---- owner's user management (only the admin_user may call these) ----
+async function adminAction(action: string, body: Record<string, unknown>, admin: string) {
+  if (action === 'admin_list') {
+    const users = await sql`
+      select u.id, u.email, u.created_at, u.last_sign_in_at, u.email_confirmed_at,
+             m.household_id, m.display_name, m.color, h.name house, h.created_at house_created,
+             s.reason, s.suspended_at,
+             greatest(u.last_sign_in_at,
+               (select max(created_at) from public.items where added_by = u.id),
+               (select max(created_at) from public.messages where sender_id = u.id),
+               (select max(started_at) from public.trips where shopper_id = u.id),
+               (select max(created_at) from public.push_subscriptions where user_id = u.id)) last_active
+        from auth.users u
+        left join public.members m on m.user_id = u.id
+        left join public.households h on h.id = m.household_id
+        left join public.suspensions s on s.user_id = u.id
+       order by h.created_at nulls last, m.joined_at`;
+    const [mine] = await sql`select household_id from public.members where user_id = ${admin} limit 1`;
+    return { users, myHousehold: mine?.household_id ?? null, admin };
+  }
+  const uid = String(body.uid || '');
+  if (!/^[0-9a-f-]{36}$/i.test(uid)) return { error: 'bad user' };
+  if (action === 'admin_suspend') {
+    const [mine] = await sql`select household_id from public.members where user_id = ${admin} limit 1`;
+    const [them] = await sql`select household_id from public.members where user_id = ${uid} limit 1`;
+    if (uid === admin || (mine && them && mine.household_id === them.household_id)) return { error: 'לא משהים את הבית שלך' };
+    const reason = String(body.reason || '').slice(0, 200);
+    await sql`insert into public.suspensions(user_id, reason) values (${uid}, ${reason})
+              on conflict (user_id) do update set reason = excluded.reason, suspended_at = now()`;
+    await sql`update auth.users set banned_until = 'infinity' where id = ${uid}`;
+    await sql`delete from auth.sessions where user_id = ${uid}`;
+    console.log(JSON.stringify({ kind: 'admin', suspended: uid }));
+    return { ok: true };
+  }
+  if (action === 'admin_restore') {
+    await sql`delete from public.suspensions where user_id = ${uid}`;
+    await sql`update auth.users set banned_until = null where id = ${uid}`;
+    console.log(JSON.stringify({ kind: 'admin', restored: uid }));
+    return { ok: true };
+  }
+  return { error: 'unknown action' };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
@@ -279,6 +323,12 @@ Deno.serve(async (req) => {
 
     const user = await userFromRequest(req);
     if (!user?.id) return json({ error: 'not signed in' }, 401);
+
+    if (String(action || '').startsWith('admin_')) {
+      const admin = await adminUser();
+      if (!admin || admin !== user.id) return json({ error: 'forbidden' }, 403);
+      return json(await adminAction(String(action), body, admin));
+    }
     const [me] = await sql`select household_id, display_name from public.members where user_id = ${user.id} limit 1`;
     if (!me) return json({ error: 'no household' }, 403);
     const hid = me.household_id as string, name = me.display_name as string;
