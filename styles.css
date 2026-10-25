@@ -451,3 +451,10 @@ nav.tabs button{min-width:64px}
 .ask-form{display:flex;flex-direction:column;gap:14px}
 .ask-hint{background:var(--orange-ground);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;font-size:15px}
 .ask-hint[hidden]{display:none}
+
+/* v1.7 — email verification screen */
+.auth.verify{text-align:center}
+.auth.verify p b{font-weight:700}
+.v-steps{text-align:right;margin:0;padding:14px 34px 14px 16px;background:var(--accent-soft);border-radius:18px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.err.ok{color:var(--accent-d)}
+.auth.verify .btn{width:100%}

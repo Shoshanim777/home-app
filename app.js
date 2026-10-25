@@ -73,7 +73,7 @@ const S = {
   addText: '', history: LS.get('ha_history', {}),
   shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
   removing: new Map(), onboard: null, picker: null, sheetKind: null, orderDraft: null,
-  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], loaded: false }, pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
+  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], loaded: false }, verifyEmail: LS.get('ha_verify', null), pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
 };
 const REMOVE_MS = 3000;
 let channel = null;
@@ -664,7 +664,23 @@ function render() {
   if (focused) { const el = document.getElementById('add-input'); if (el) { el.focus(); try { el.setSelectionRange(...sel); } catch {} } }
 }
 
+const APP_HOME = location.origin + location.pathname.replace(/[^/]*$/, '');
+function renderVerify() {
+  app.innerHTML = `
+  <div class="auth verify">
+    <img class="logo-img" src="icon-512.png" alt="">
+    <h1>בדקו את המייל 📬</h1>
+    <p>שלחנו קישור אישור אל<br><b dir="ltr">${esc(S.verifyEmail)}</b></p>
+    <ol class="v-steps"><li>פותחים את המייל מ"בדרך לסופר"</li><li>לוחצים <b>אישור הכתובת</b></li><li>חוזרים לכאן ונכנסים</li></ol>
+    <div class="err ok">${esc(S.authErr)}</div>
+    <button class="btn violet" data-act="verify-login">אישרתי · כניסה</button>
+    <button class="btn ghost" data-act="verify-resend" ${S.busy ? 'disabled' : ''}>לא הגיע? שליחה חוזרת</button>
+    <p class="small muted">לא מוצאים? כדאי להציץ גם בתיקיית הספאם / קידומי מכירות.</p>
+    <button class="link" data-act="verify-back">כתובת שגויה? חזרה</button>
+  </div>`;
+}
 function renderAuth() {
+  if (S.verifyEmail) return renderVerify();
   const signup = S.authMode === 'signup';
   app.innerHTML = `
   <form class="auth" data-form="auth">
@@ -1596,6 +1612,13 @@ document.addEventListener('click', async e => {
   if (act === 'backdrop' && e.target !== b) return;
   switch (act) {
     case 'backdrop': case 'backdrop-close': closeSheet(); break;
+    case 'verify-resend': {
+      S.busy = true; render();
+      const { error } = await sb.auth.resend({ type: 'signup', email: S.verifyEmail, options: { emailRedirectTo: APP_HOME } });
+      S.busy = false; S.authErr = error ? (/rate|seconds/i.test(error.message || '') ? 'אפשר לשלוח שוב בעוד דקה' : hebAuthErr(error)) : 'נשלח שוב ✓'; render(); break;
+    }
+    case 'verify-login': { S.authMode = 'login'; S.authErr = ''; const em = S.verifyEmail; S.verifyEmail = null; LS.set('ha_verify', null); render(); setTimeout(() => { const i = document.getElementById('em'); if (i) i.value = em || ''; document.getElementById('pw')?.focus(); }, 0); break; }
+    case 'verify-back': S.verifyEmail = null; LS.set('ha_verify', null); S.authMode = 'signup'; S.authErr = ''; render(); break;
     case 'auth-toggle': S.authMode = S.authMode === 'login' ? 'signup' : 'login'; S.authErr = ''; render(); break;
     case 'toggle': {
       const it = S.items.find(i => i.id === b.dataset.id); if (!it) break;
@@ -1747,11 +1770,14 @@ document.addEventListener('submit', async e => {
     }
     case 'auth': {
       S.busy = true; S.authErr = ''; render();
-      const fn = S.authMode === 'signup' ? sb.auth.signUp : sb.auth.signInWithPassword;
-      const { data, error } = await fn.call(sb.auth, { email: fd.email.trim(), password: fd.password });
+      const email = fd.email.trim();
+      const { data, error } = S.authMode === 'signup'
+        ? await sb.auth.signUp({ email, password: fd.password, options: { emailRedirectTo: APP_HOME } })
+        : await sb.auth.signInWithPassword({ email, password: fd.password });
       S.busy = false;
-      if (error) S.authErr = hebAuthErr(error);
-      else if (S.authMode === 'signup' && !data.session) S.authErr = 'שלחנו לך מייל לאישור. אחרי האישור חוזרים לכאן ונכנסים.';
+      if (error && /Email not confirmed/i.test(error.message || '')) { S.verifyEmail = email; S.authErr = 'עוד לא אישרת את הכתובת. הקישור נמצא במייל.'; LS.set('ha_verify', email); }
+      else if (error) S.authErr = hebAuthErr(error);
+      else if (S.authMode === 'signup' && !data.session) { S.verifyEmail = email; S.authErr = ''; LS.set('ha_verify', email); }
       render();
       break;
     }
@@ -1857,6 +1883,7 @@ async function safeLoad() {
 sb.auth.onAuthStateChange((evt, session) => {
   const prevUser = S.user?.id;
   S.session = session; S.user = session?.user || null;
+  if (S.user) { S.verifyEmail = null; LS.set('ha_verify', null); }
   if (!S.user) { if (channel) { sb.removeChannel(channel); channel = null; } S.household = null; S.booting = false; render(); return; }
   if (prevUser !== S.user.id) {
     loadCache(); S.booting = false; render();
