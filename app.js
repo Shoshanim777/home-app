@@ -658,7 +658,7 @@ function render() {
   if (S.booting) { app.innerHTML = ''; return; }
   if (S.suspended) return renderSuspended();
   if (S.recovery && S.session) return renderRecovery();
-  if (S.locked && S.session) return renderLocked();
+  if ((S.locked || S.cover) && S.session) return renderLocked();
   if (!S.session) return S.forgot ? renderForgot() : renderAuth();
   if (!S.household) return renderOnboard();
   const focused = document.activeElement?.id === 'add-input';
@@ -1742,9 +1742,29 @@ function renderLocked() {
   </div>`;
 }
 
+const canDirectPasskey = () => !!(PublicKeyCredential.parseRequestOptionsFromJSON && sb.auth._startPasskeyAuthentication && sb.auth._verifyPasskeyAuthentication);
+async function passkeyCeremony() {
+  if (!canDirectPasskey()) return sb.auth.signInWithPasskey();
+  const { data: o, error: e1 } = await sb.auth._startPasskeyAuthentication({ options: {} });
+  if (e1 || !o) return { error: e1 || new Error('start failed') };
+  const opts = { ...o.options };
+  const known = LS.get('ha_pk_cred', null);
+  if (known) opts.allowCredentials = [{ type: 'public-key', id: known, transports: ['internal', 'hybrid'] }];
+  let cred;
+  try { cred = await navigator.credentials.get({ publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(opts) }); }
+  catch (err) {
+    // cancelled, or the remembered passkey is gone from this device: next tap lets the system offer all passkeys
+    if (known && err?.name === 'NotAllowedError') LS.set('ha_pk_cred', null);
+    return { error: err };
+  }
+  if (!cred) return { error: new Error('cancelled') };
+  const res = await sb.auth._verifyPasskeyAuthentication({ challengeId: o.challenge_id, credential: cred.toJSON() });
+  if (!res.error) LS.set('ha_pk_cred', cred.id);
+  return res;
+}
 async function passkeySignIn() {
   S.busy = true; S.authErr = ''; render();
-  const { error } = await sb.auth.signInWithPasskey();
+  const { error } = await passkeyCeremony();
   S.busy = false;
   if (error) {
     const m = error.message || error.code || '';
@@ -1759,8 +1779,19 @@ async function loadPasskeys() {
   try { const r = await sb.auth.passkey.list(); S.passkeys = Array.isArray(r) ? r : (r?.data || []); } catch { S.passkeys = []; }
   if (S.sheetKind === 'settings') setSheet(settingsHtml());
 }
+async function registerHere() {
+  if (!(PublicKeyCredential.parseCreationOptionsFromJSON && sb.auth._startPasskeyRegistration && sb.auth._verifyPasskeyRegistration)) return sb.auth.registerPasskey();
+  const { data: o, error: e1 } = await sb.auth._startPasskeyRegistration();
+  if (e1 || !o) return { error: e1 || new Error('start failed') };
+  let cred;
+  try { cred = await navigator.credentials.create({ publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(o.options) }); } catch (err) { return { error: err }; }
+  if (!cred) return { error: new Error('cancelled') };
+  const res = await sb.auth._verifyPasskeyRegistration({ challengeId: o.challenge_id, credential: cred.toJSON() });
+  if (!res.error) LS.set('ha_pk_cred', cred.id);
+  return res;
+}
 async function addPasskey() {
-  const { error } = await sb.auth.registerPasskey();
+  const { error } = await registerHere();
   if (error) { if (!/cancel|abort|NotAllowed/i.test(error.message || '')) toast('לא הצלחתי להפעיל: ' + (error.message || '')); return; }
   toast('טביעת האצבע הופעלה במכשיר הזה 🔐'); LS.set('ha_passkey_here', true); loadPasskeys();
 }
@@ -1791,13 +1822,24 @@ function openPwChange() {
       <button class="link" type="button" data-act="pw-send-code">לא הגיע? שליחה חוזרת</button>
     </form>`, '', 'pw');
 }
-function lockIfNeeded() {
-  if (!S.user || !LS.get('ha_lock', false) || !passkeySupported()) return;
-  if (hiddenAt && Date.now() - hiddenAt >= LOCK_AFTER_MS) { S.locked = true; closeSheet(); render(); }
+const lockEnabled = () => !!(S.user && LS.get('ha_lock', false) && passkeySupported());
+let autoUnlockAt = 0;
+function autoUnlock() {
+  // ask for the fingerprint straight away, once per lock (a cancel leaves the button on screen)
+  if (!S.locked || document.visibilityState !== 'visible' || Date.now() - autoUnlockAt < 4000) return;
+  autoUnlockAt = Date.now();
+  setTimeout(async () => { if (S.locked && await passkeySignIn()) { S.locked = false; S.cover = false; S.authErr = ''; render(); } }, 250);
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') hiddenAt = Date.now();
-  else { lockIfNeeded(); hiddenAt = 0; }
+  if (!lockEnabled()) return;
+  if (document.visibilityState === 'hidden') {
+    hiddenAt = Date.now();
+    if (!S.locked) { S.cover = true; render(); }      // the phone's app-switcher snapshot now shows the lock, not the list
+  } else {
+    if (S.locked || (hiddenAt && Date.now() - hiddenAt >= LOCK_AFTER_MS)) { S.locked = true; S.cover = false; closeSheet(); render(); autoUnlock(); }
+    else if (S.cover) { S.cover = false; render(); }
+    hiddenAt = 0;
+  }
 });
 
 /* ---------------- events ---------------- */
@@ -1914,7 +1956,7 @@ document.addEventListener('click', async e => {
     case 'passkey-signin': await passkeySignIn(); break;
     case 'forgot-open': S.forgot = true; S.forgotSent = false; S.forgotEmail = document.getElementById('em')?.value || ''; S.authErr = ''; render(); break;
     case 'forgot-back': S.forgot = false; S.authErr = ''; S.authMode = 'login'; render(); break;
-    case 'unlock': if (await passkeySignIn()) { S.locked = false; S.authErr = ''; render(); } break;
+    case 'unlock': if (await passkeySignIn()) { S.locked = false; S.cover = false; S.authErr = ''; render(); } break;
     case 'lock-password': S.locked = false; LS.set('ha_lock', false); await sb.auth.signOut(); break;
     case 'passkey-add': addPasskey(); break;
     case 'passkey-del': removePasskey(b.dataset.id); break;
@@ -2131,6 +2173,7 @@ sb.auth.onAuthStateChange((evt, session) => {
   if (!S.user) { if (channel) { sb.removeChannel(channel); channel = null; } S.household = null; S.booting = false; render(); return; }
   if (prevUser !== S.user.id) {
     loadCache(); S.booting = false; render();
+    if (S.locked) autoUnlock();
     safeLoad().then(() => { flush(); ensurePush(); flushPendingNotify(); if (pendingOpen) { handleOpen(pendingOpen); pendingOpen = null; } else maybePromptConfirm(); });
   }
 });
