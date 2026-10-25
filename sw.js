@@ -1,5 +1,5 @@
 // בדרך לסופר — service worker: offline shell + push notifications + app-icon badge
-const VERSION = 'v1.9.1';
+const VERSION = 'v1.9.2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', e => {

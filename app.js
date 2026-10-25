@@ -1763,8 +1763,8 @@ async function passkeyCeremony() {
   return res;
 }
 async function passkeySignIn() {
-  S.busy = true; S.authErr = ''; render();
-  const { error } = await passkeyCeremony();
+  S.busy = true; S.authErr = ''; S.pkBusy = true; render();
+  const { error } = await passkeyCeremony().finally(() => { S.pkBusy = false; });
   S.busy = false;
   if (error) {
     const m = error.message || error.code || '';
@@ -1791,7 +1791,8 @@ async function registerHere() {
   return res;
 }
 async function addPasskey() {
-  const { error } = await registerHere();
+  S.pkBusy = true;
+  const { error } = await registerHere().finally(() => { S.pkBusy = false; });
   if (error) { if (!/cancel|abort|NotAllowed/i.test(error.message || '')) toast('לא הצלחתי להפעיל: ' + (error.message || '')); return; }
   toast('טביעת האצבע הופעלה במכשיר הזה 🔐'); LS.set('ha_passkey_here', true); loadPasskeys();
 }
@@ -1825,11 +1826,23 @@ function openPwChange() {
 const lockEnabled = () => !!(S.user && LS.get('ha_lock', false) && passkeySupported());
 let autoUnlockAt = 0;
 function autoUnlock() {
-  // ask for the fingerprint straight away, once per lock (a cancel leaves the button on screen)
+  // ask for the fingerprint straight away, once per lock (a cancel leaves the button on screen).
+  // Android only allows it once the app has focus, so wait for that if needed.
   if (!S.locked || document.visibilityState !== 'visible' || Date.now() - autoUnlockAt < 4000) return;
+  if (!document.hasFocus()) { window.addEventListener('focus', () => setTimeout(autoUnlock, 150), { once: true }); return; }
   autoUnlockAt = Date.now();
   setTimeout(async () => { if (S.locked && await passkeySignIn()) { S.locked = false; S.cover = false; S.authErr = ''; render(); } }, 250);
 }
+// cover the moment the app loses focus (earlier than "hidden"), so the app-switcher snapshot shows the lock
+window.addEventListener('blur', () => {
+  if (!lockEnabled() || S.locked || S.cover || S.pkBusy) return;
+  S.cover = true; render();
+});
+window.addEventListener('focus', () => {
+  if (!lockEnabled() || S.locked || !S.cover || document.visibilityState !== 'visible') return;
+  if (hiddenAt && Date.now() - hiddenAt >= LOCK_AFTER_MS) { S.locked = true; S.cover = false; closeSheet(); render(); autoUnlock(); }
+  else { S.cover = false; render(); }
+});
 document.addEventListener('visibilitychange', () => {
   if (!lockEnabled()) return;
   if (document.visibilityState === 'hidden') {
