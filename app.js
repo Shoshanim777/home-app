@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, experimental: { passkey: true } }
 });
 const FN_URL = SUPABASE_URL + '/functions/v1/notify';
 
@@ -657,7 +657,9 @@ function render() {
   document.body.classList.toggle('trip-mode', !!(S.trip && S.household && S.tab === 'list'));
   if (S.booting) { app.innerHTML = ''; return; }
   if (S.suspended) return renderSuspended();
-  if (!S.session) return renderAuth();
+  if (S.recovery && S.session) return renderRecovery();
+  if (S.locked && S.session) return renderLocked();
+  if (!S.session) return S.forgot ? renderForgot() : renderAuth();
   if (!S.household) return renderOnboard();
   const focused = document.activeElement?.id === 'add-input';
   const sel = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
@@ -692,6 +694,8 @@ function renderAuth() {
     <div class="field"><label for="pw">סיסמה</label><input id="pw" name="password" type="password" minlength="6" autocomplete="${signup ? 'new-password' : 'current-password'}" required dir="ltr"></div>
     <div class="err">${esc(S.authErr)}</div>
     <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>${signup ? 'יצירת משתמש' : 'כניסה'}</button>
+    ${!signup && passkeySupported() ? '<button class="btn ghost" type="button" data-act="passkey-signin" ' + (S.busy ? 'disabled' : '') + '>🔐 כניסה עם טביעת אצבע</button>' : ''}
+    ${signup ? '' : '<button class="link" type="button" data-act="forgot-open">שכחתי סיסמה</button>'}
     <button class="link" type="button" data-act="auth-toggle">${signup ? 'כבר יש לי משתמש · כניסה' : 'פעם ראשונה? יצירת משתמש'}</button>
   </form>`;
 }
@@ -1077,12 +1081,13 @@ function settingsHtml() {
       <div class="field" style="flex:1"><label for="mn">השם שלי</label><input id="mn" name="display" value="${esc(m?.display_name || '')}" maxlength="20" required></div>
       <button class="btn violet" type="submit" style="flex:0 0 100px;height:52px;font-size:16px">עדכון</button>
     </form>
+    ${securityHtml()}
     ${S.isAdmin ? '<button class="btn ghost" data-act="admin-open">🛡️ ניהול משתמשים</button>' : ''}
     <a class="btn ghost" href="guide.html" style="text-decoration:none;display:flex;align-items:center;justify-content:center">📖 מדריך שימוש</a>
     <div style="font-size:13px;color:var(--muted)">מחובר/ת בתור ${esc(S.user.email)}</div>
     <button class="danger" data-act="signout">יציאה מהמשתמש</button>`;
 }
-function openSettings() { openSheet(settingsHtml(), 'tall scroll', 'settings'); }
+function openSettings() { openSheet(settingsHtml(), 'tall scroll', 'settings'); loadPasskeys(); }
 
 function orderHtml() {
   const o = S.orderDraft;
@@ -1699,6 +1704,102 @@ async function adminRestore(id) {
   toast('המשתמש הוחזר ✓'); loadAdmin();
 }
 
+/* ---------------- security: forgot password, password change with email code, fingerprint (passkeys), lock ---------------- */
+const passkeySupported = () => !!(window.PublicKeyCredential && navigator.credentials && sb.auth.signInWithPasskey);
+const LOCK_AFTER_MS = 5 * 60e3;
+let hiddenAt = 0;
+
+function renderForgot() {
+  app.innerHTML = `<form class="auth" data-form="forgot">
+    <img class="logo-img" src="icon-512.png" alt="">
+    <h1>שכחתי סיסמה</h1>
+    <p>נשלח לך מייל עם קישור לבחירת סיסמה חדשה.</p>
+    <div class="field"><label for="fg-em">אימייל</label><input id="fg-em" name="email" type="email" autocomplete="email" required dir="ltr" value="${esc(S.forgotEmail || '')}"></div>
+    <div class="err ${S.forgotSent ? 'ok' : ''}">${esc(S.authErr)}</div>
+    <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>${S.forgotSent ? 'שליחה חוזרת' : 'שליחת קישור'}</button>
+    <button class="link" type="button" data-act="forgot-back">חזרה לכניסה</button>
+  </form>`;
+}
+function renderRecovery() {
+  app.innerHTML = `<form class="auth" data-form="recovery">
+    <img class="logo-img" src="icon-512.png" alt="">
+    <h1>סיסמה חדשה</h1>
+    <p dir="auto">${esc(S.user?.email || '')}</p>
+    <div class="field"><label for="rc-pw">סיסמה חדשה</label><input id="rc-pw" name="password" type="password" minlength="6" autocomplete="new-password" required dir="ltr"></div>
+    <div class="field"><label for="rc-pw2">שוב, לאימות</label><input id="rc-pw2" name="password2" type="password" minlength="6" autocomplete="new-password" required dir="ltr"></div>
+    <div class="err">${esc(S.authErr)}</div>
+    <button class="btn violet" type="submit" ${S.busy ? 'disabled' : ''}>שמירת הסיסמה</button>
+  </form>`;
+}
+function renderLocked() {
+  app.innerHTML = `<div class="auth locked">
+    <span class="lock-ico"><svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" fill="none" stroke="#5B3DF5" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3.5-1 6-2.5 8M8.5 7.5A4.5 4.5 0 0 1 16.5 10c0 4-1 7-2.5 9.5M6 10a6 6 0 0 1 1-3.3M18.8 15a20 20 0 0 0 .2-5 7 7 0 0 0-11-5.7M12 11c0-1.5-.5-2-1.5-2"/></svg></span>
+    <h1>האפליקציה נעולה</h1>
+    <p>פותחים עם טביעת אצבע או נעילת המסך של הטלפון.</p>
+    <div class="err">${esc(S.authErr)}</div>
+    <button class="btn violet" data-act="unlock">🔐 פתיחה</button>
+    <button class="link" data-act="lock-password">כניסה עם סיסמה במקום</button>
+  </div>`;
+}
+
+async function passkeySignIn() {
+  S.busy = true; S.authErr = ''; render();
+  const { error } = await sb.auth.signInWithPasskey();
+  S.busy = false;
+  if (error) {
+    const m = error.message || error.code || '';
+    S.authErr = /banned/i.test(m) ? '' : /not.?confirmed/i.test(m) ? 'צריך קודם לאשר את המייל' : /cancel|abort|NotAllowed|timed out/i.test(m) ? '' : 'לא הצלחתי להיכנס עם טביעת אצבע. אפשר להיכנס עם סיסמה.';
+    if (/banned/i.test(m)) S.suspended = true;
+    render(); return false;
+  }
+  return true;
+}
+async function loadPasskeys() {
+  if (!sb.auth.passkey?.list) return;
+  try { const r = await sb.auth.passkey.list(); S.passkeys = Array.isArray(r) ? r : (r?.data || []); } catch { S.passkeys = []; }
+  if (S.sheetKind === 'settings') setSheet(settingsHtml());
+}
+async function addPasskey() {
+  const { error } = await sb.auth.registerPasskey();
+  if (error) { if (!/cancel|abort|NotAllowed/i.test(error.message || '')) toast('לא הצלחתי להפעיל: ' + (error.message || '')); return; }
+  toast('טביעת האצבע הופעלה במכשיר הזה 🔐'); LS.set('ha_passkey_here', true); loadPasskeys();
+}
+async function removePasskey(id) {
+  try { const r = await sb.auth.passkey.delete({ passkeyId: id }); if (r?.error) throw r.error; } catch (e) { toast('לא הצלחתי להסיר'); return; }
+  toast('הוסר'); loadPasskeys();
+}
+function securityHtml() {
+  const pk = S.passkeys || [];
+  const lockOn = !!LS.get('ha_lock', false);
+  return `<div class="set-sec"><h3>אבטחה</h3>
+    ${passkeySupported() ? `<div class="lead">🔐 כניסה עם טביעת אצבע או נעילת המסך, בלי להקליד סיסמה.</div>
+      ${pk.length ? `<div class="pk-list">${pk.map(p => `<div class="pk-item"><span>📱 ${esc(p.friendly_name || 'מכשיר')}<small>${p.last_used_at ? 'שימוש אחרון ' + relDay(p.last_used_at) : 'נוסף ' + relDay(p.created_at)}</small></span>
+        <button class="pk-del" data-act="passkey-del" data-id="${esc(p.id)}" aria-label="הסרה">${I.x}</button></div>`).join('')}</div>` : ''}
+      <button class="btn soft" data-act="passkey-add">${pk.length ? '+ הוספת המכשיר הזה' : 'הפעלת טביעת אצבע במכשיר הזה'}</button>
+      ${pk.length ? `<label class="tgl"><input type="checkbox" data-act="lock-toggle" ${lockOn ? 'checked' : ''}><span>לנעול את האפליקציה אחרי 5 דקות ברקע</span></label>` : ''}` : ''}
+    <button class="btn ghost" data-act="pw-change">🔑 שינוי סיסמה</button>
+  </div>`;
+}
+function openPwChange() {
+  openSheet(`${sheetHead('שינוי סיסמה')}
+    <div class="lead">לשמירה על החשבון, נשלח קוד אימות למייל <b dir="ltr">${esc(S.user.email)}</b>.</div>
+    ${S.pwCodeSent ? '' : '<button class="btn violet" data-act="pw-send-code">שליחת קוד למייל</button>'}
+    <form data-form="pw-change" style="display:flex;flex-direction:column;gap:12px" ${S.pwCodeSent ? '' : 'hidden'}>
+      <div class="field"><label for="pw-code">הקוד מהמייל</label><input id="pw-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required dir="ltr"></div>
+      <div class="field"><label for="pw-new">סיסמה חדשה</label><input id="pw-new" name="password" type="password" minlength="6" autocomplete="new-password" required dir="ltr"></div>
+      <button class="btn violet" type="submit">שמירת הסיסמה</button>
+      <button class="link" type="button" data-act="pw-send-code">לא הגיע? שליחה חוזרת</button>
+    </form>`, '', 'pw');
+}
+function lockIfNeeded() {
+  if (!S.user || !LS.get('ha_lock', false) || !passkeySupported()) return;
+  if (hiddenAt && Date.now() - hiddenAt >= LOCK_AFTER_MS) { S.locked = true; closeSheet(); render(); }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+  else { lockIfNeeded(); hiddenAt = 0; }
+});
+
 /* ---------------- events ---------------- */
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1810,6 +1911,20 @@ document.addEventListener('click', async e => {
     }
     case 'tab': S.tab = b.dataset.tab; render(); if (S.tab === 'stats') loadStats(); window.scrollTo(0, 0); break;
     case 'settings': openSettings(); break;
+    case 'passkey-signin': await passkeySignIn(); break;
+    case 'forgot-open': S.forgot = true; S.forgotSent = false; S.forgotEmail = document.getElementById('em')?.value || ''; S.authErr = ''; render(); break;
+    case 'forgot-back': S.forgot = false; S.authErr = ''; S.authMode = 'login'; render(); break;
+    case 'unlock': if (await passkeySignIn()) { S.locked = false; S.authErr = ''; render(); } break;
+    case 'lock-password': S.locked = false; LS.set('ha_lock', false); await sb.auth.signOut(); break;
+    case 'passkey-add': addPasskey(); break;
+    case 'passkey-del': removePasskey(b.dataset.id); break;
+    case 'lock-toggle': LS.set('ha_lock', !!b.checked); toast(b.checked ? 'האפליקציה תינעל אחרי 5 דקות ברקע' : 'הנעילה כבויה'); break;
+    case 'pw-change': S.pwCodeSent = false; openPwChange(); break;
+    case 'pw-send-code': {
+      const { error } = await sb.auth.reauthenticate();
+      if (error) { toast(/seconds|rate/i.test(error.message || '') ? 'אפשר לשלוח שוב בעוד דקה' : 'לא הצלחתי לשלוח קוד'); break; }
+      S.pwCodeSent = true; openPwChange(); toast('נשלח קוד למייל'); setTimeout(() => document.getElementById('pw-code')?.focus(), 200); break;
+    }
     case 'admin-open': closeSheet(); S.tab = 'admin'; render(); window.scrollTo(0, 0); loadAdmin(); break;
     case 'admin-refresh': loadAdmin(); break;
     case 'admin-filter': S.adm.filter = b.dataset.f; render(); break;
@@ -1861,6 +1976,29 @@ document.addEventListener('submit', async e => {
     case 'lreq': { const t = String(fd.text || '').trim(); if (t) { f.reset(); requestOnLanding(t); } break; }
     case 'del-new': openDeliveryNow(fd); break;
     case 'ask': newAsk(fd); break;
+    case 'forgot': {
+      const email = String(fd.email || '').trim(); if (!email) break;
+      S.busy = true; S.forgotEmail = email; render();
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_HOME });
+      S.busy = false;
+      if (error && /seconds|rate/i.test(error.message || '')) S.authErr = 'אפשר לשלוח שוב בעוד דקה';
+      else if (error) S.authErr = hebAuthErr(error);
+      else { S.forgotSent = true; S.authErr = 'אם הכתובת רשומה, נשלח אליה מייל עם קישור. כדאי להציץ גם בספאם.'; }
+      render(); break;
+    }
+    case 'recovery': {
+      if (fd.password !== fd.password2) { S.authErr = 'הסיסמאות לא זהות'; render(); break; }
+      S.busy = true; render();
+      const { error } = await sb.auth.updateUser({ password: fd.password });
+      S.busy = false;
+      if (error) { S.authErr = /different from the old/i.test(error.message || '') ? 'זו הסיסמה הקודמת. בחרו סיסמה אחרת.' : hebAuthErr(error); render(); break; }
+      S.recovery = false; S.authErr = ''; render(); toast('הסיסמה עודכנה ✓'); break;
+    }
+    case 'pw-change': {
+      const { error } = await sb.auth.updateUser({ password: fd.password, nonce: String(fd.code || '').trim() });
+      if (error) { toast(/nonce|otp|expired|invalid/i.test(error.message || '') ? 'הקוד לא נכון או שפג תוקפו' : /different from the old/i.test(error.message || '') ? 'זו הסיסמה הקודמת' : 'לא הצלחתי לשנות: ' + (error.message || '')); break; }
+      closeSheet(); S.pwCodeSent = false; toast('הסיסמה שונתה ✓'); break;
+    }
     case 'admin-suspend': adminSuspend(f.dataset.id, String(fd.reason || '').trim()); break;
     case 'dline': { const t = String(fd.text || '').trim(); if (t) { f.reset(); addDeliveryLine(f.dataset.id, t); } break; }
     case 'add': {
@@ -1986,6 +2124,8 @@ async function safeLoad() {
 
 sb.auth.onAuthStateChange((evt, session) => {
   const prevUser = S.user?.id;
+  if (evt === 'PASSWORD_RECOVERY') { S.recovery = true; S.authErr = ''; }
+  if (evt === 'INITIAL_SESSION' && session && LS.get('ha_lock', false) && passkeySupported()) S.locked = true;
   S.session = session; S.user = session?.user || null;
   if (S.user) { S.verifyEmail = null; LS.set('ha_verify', null); }
   if (!S.user) { if (channel) { sb.removeChannel(channel); channel = null; } S.household = null; S.booting = false; render(); return; }

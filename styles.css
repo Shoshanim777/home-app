@@ -490,3 +490,15 @@ nav.tabs button{min-width:64px}
 .adm-note{background:var(--orange-ground);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .adm-note b{font-size:16px}
 .btn.danger-b{background:#B42318}
+
+/* v1.9 — security */
+.auth.locked{text-align:center;align-items:center}
+.auth.locked .btn{width:100%}
+.lock-ico{width:96px;height:96px;border-radius:28px;background:var(--accent-soft);display:grid;place-items:center}
+.pk-list{display:flex;flex-direction:column;gap:6px}
+.pk-item{display:flex;align-items:center;gap:8px;background:var(--ground);border-radius:14px;padding:6px 6px 6px 12px}
+.pk-item span{flex:1;min-width:0;font-weight:600;font-size:15px;padding-inline-start:6px}
+.pk-item small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.pk-del{width:40px;height:40px;border:0;border-radius:10px;background:#fff;color:var(--muted);display:grid;place-items:center}
+.tgl{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px}
+.tgl input{width:22px;height:22px;accent-color:var(--accent)}
