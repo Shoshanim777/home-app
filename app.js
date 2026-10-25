@@ -61,6 +61,7 @@ for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { em
 const CUSTOM_TAB = 'שלנו';
 
 /* ---------------- state ---------------- */
+const APP_VERSION = 'v1.9.3';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -1085,7 +1086,8 @@ function settingsHtml() {
     ${S.isAdmin ? '<button class="btn ghost" data-act="admin-open">🛡️ ניהול משתמשים</button>' : ''}
     <a class="btn ghost" href="guide.html" style="text-decoration:none;display:flex;align-items:center;justify-content:center">📖 מדריך שימוש</a>
     <div style="font-size:13px;color:var(--muted)">מחובר/ת בתור ${esc(S.user.email)}</div>
-    <button class="danger" data-act="signout">יציאה מהמשתמש</button>`;
+    <button class="danger" data-act="signout">יציאה מהמשתמש</button>
+    <footer class="set-foot"><span>בדרך לסופר · גרסה <bdi dir="ltr">${APP_VERSION}</bdi></span><span>© ${new Date().getFullYear()} כל הזכויות שמורות</span></footer>`;
 }
 function openSettings() { openSheet(settingsHtml(), 'tall scroll', 'settings'); loadPasskeys(); }
 
@@ -1636,8 +1638,67 @@ async function loadAdmin() {
   S.adm = { ...(S.adm || {}), loading: true }; render();
   const r = await adminCall('admin_list');
   if (r.error) { S.adm = { ...(S.adm || {}), loading: false }; toast(r.error === 'forbidden' ? 'אין הרשאה' : 'לא הצלחתי לטעון'); render(); return; }
-  S.adm = { users: r.users || [], mine: r.myHousehold, admin: r.admin, filter: S.adm?.filter || 'all', loading: false };
-  render();
+  S.adm = { users: r.users || [], mine: r.myHousehold, admin: r.admin, filter: S.adm?.filter || 'all', loading: false, backups: S.adm?.backups };
+  render(); loadBackups();
+}
+/* ---- backups (owner only): weekly automatic + manual, download as a password-encrypted file ---- */
+async function loadBackups() {
+  const r = await adminCall('admin_backups');
+  if (r.error) return;
+  S.adm = { ...(S.adm || {}), backups: r.backups || [] };
+  if (S.tab === 'admin') render();
+}
+const kb = n => n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+function backupsHtml() {
+  const bs = S.adm?.backups;
+  const last = bs?.[0];
+  const rows = (bs || []).map(b => `<div class="adm-row bk-row">
+      <span class="bk-ico" aria-hidden="true">${b.kind === 'manual' ? '✋' : '🗓️'}</span>
+      <span class="adm-t"><b>${new Date(b.created_at).toLocaleDateString('he-IL')} · ${hhmm(b.created_at)}</b><small>${b.kind === 'manual' ? 'ידני' : 'אוטומטי'} · <bdi dir="ltr">${kb(b.size_bytes)}</bdi> · ${b.counts?.items ?? 0} פריטים · ${b.counts?.households ?? 0} בתים</small></span>
+      <button class="adm-btn soft" data-act="backup-dl" data-id="${b.id}">הורדה</button></div>`).join('');
+  return `<section class="card adm-h"><div class="adm-hh"><b>💾 גיבויים</b><span>${last ? 'אחרון: ' + admWhen(last.created_at) : bs ? 'עוד אין' : 'טוען…'}</span></div>
+    <div class="bk-lead">גיבוי אוטומטי כל שבוע (שישי בלילה). נשמרים 10 האחרונים. כדאי להוריד עותק פעם בחודש ולשמור אותו בדרייב.</div>
+    ${rows}
+    <div class="bk-act"><button class="btn soft" data-act="backup-now" ${S.bkBusy ? 'disabled' : ''}>${S.bkBusy ? 'מגבה…' : 'גיבוי עכשיו'}</button></div></section>`;
+}
+async function backupNow() {
+  S.bkBusy = true; render();
+  const r = await adminCall('admin_backup_now');
+  S.bkBusy = false;
+  if (r.error) { toast('הגיבוי נכשל: ' + r.error); render(); return; }
+  toast('הגיבוי נשמר ✓'); loadBackups();
+}
+function openBackupDl(id) {
+  const b = (S.adm?.backups || []).find(x => x.id === id); if (!b) return;
+  openSheet(`${sheetHead('הורדת גיבוי')}
+    <div class="lead">הקובץ יוצפן בסיסמה שתבחר. <b>בלי הסיסמה אי אפשר לפתוח אותו</b>, אז שמור אותה במנהל הסיסמאות.</div>
+    <form data-form="backup-dl" data-id="${id}" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field"><label for="bk-pw">סיסמה לקובץ</label><input id="bk-pw" name="pw" type="password" minlength="10" autocomplete="new-password" required dir="ltr"></div>
+      <div class="field"><label for="bk-pw2">שוב, לאימות</label><input id="bk-pw2" name="pw2" type="password" minlength="10" autocomplete="new-password" required dir="ltr"></div>
+      <div class="err" id="bk-err"></div>
+      <button class="btn violet" type="submit">הצפנה והורדה</button>
+    </form>`, '', 'backup-dl');
+}
+async function backupDownload(id, pw, pw2) {
+  const err = t => { const e = document.getElementById('bk-err'); if (e) e.textContent = t; };
+  if (pw !== pw2) return err('הסיסמאות לא זהות');
+  if (pw.length < 10) return err('לפחות 10 תווים');
+  err('מוריד ומצפין…');
+  const r = await adminCall('admin_backup_get', { id });
+  if (r.error || !r.gzip_b64) return err('לא הצלחתי להוריד: ' + (r.error || ''));
+  const plain = Uint8Array.from(atob(r.gzip_b64), c => c.charCodeAt(0));
+  // file = "BDLS1" | salt(16) | iv(12) | AES-GCM(gzip JSON); key = PBKDF2-SHA256(password, salt, 310000)
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain));
+  const blob = new Blob([new TextEncoder().encode('BDLS1'), salt, iv, ct], { type: 'application/octet-stream' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'backup-baderech-' + new Date(r.created_at).toLocaleDateString('sv-SE') + '.bdls';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  closeSheet(); toast('הקובץ ירד ✓ שמור אותו בדרייב');
 }
 const ADM_WEEK = 7 * 864e5;
 const admActive = u => u.last_active && Date.now() - new Date(u.last_active).getTime() < ADM_WEEK;
@@ -1677,6 +1738,7 @@ function renderAdmin() {
       return `<section class="card adm-h"><div class="adm-hh ${mine ? 'mine' : ''}"><b>${title}</b><span>${mine ? 'הבית שלך' : k === 'none' ? '' : 'נפתח ' + relDay(u0.house_created)}</span></div>
         ${list.map(u => row(u, mine || u.id === A.admin)).join('')}</section>`;
     }).join('') : '<div class="empty">אין משתמשים בסינון הזה</div>'}
+    ${backupsHtml()}
   </div>`;
 }
 function openAdminUser(id) {
@@ -1985,6 +2047,8 @@ document.addEventListener('click', async e => {
     case 'admin-filter': S.adm.filter = b.dataset.f; render(); break;
     case 'admin-user': openAdminUser(b.dataset.id); break;
     case 'admin-restore': adminRestore(b.dataset.id); break;
+    case 'backup-now': backupNow(); break;
+    case 'backup-dl': openBackupDl(b.dataset.id); break;
     case 'suspended-out': S.suspended = false; S.suspendedEmail = null; await sb.auth.signOut(); render(); break;
     case 'go-family': document.getElementById('banner')?.remove(); S.tab = 'family'; render(); window.scrollTo(0, 0); break;
     case 'land-open': openLanding(); break;
@@ -2055,6 +2119,7 @@ document.addEventListener('submit', async e => {
       closeSheet(); S.pwCodeSent = false; toast('הסיסמה שונתה ✓'); break;
     }
     case 'admin-suspend': adminSuspend(f.dataset.id, String(fd.reason || '').trim()); break;
+    case 'backup-dl': backupDownload(f.dataset.id, String(fd.pw || ''), String(fd.pw2 || '')); break;
     case 'dline': { const t = String(fd.text || '').trim(); if (t) { f.reset(); addDeliveryLine(f.dataset.id, t); } break; }
     case 'add': {
       const v = S.addText.trim(); if (!v) return;

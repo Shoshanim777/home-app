@@ -502,3 +502,9 @@ nav.tabs button{min-width:64px}
 .pk-del{width:40px;height:40px;border:0;border-radius:10px;background:#fff;color:var(--muted);display:grid;place-items:center}
 .tgl{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px}
 .tgl input{width:22px;height:22px;accent-color:var(--accent)}
+/* v1.9.3: backups + settings footer */
+.bk-lead{padding:10px 14px 4px;font-size:13px;color:var(--muted);line-height:1.5}
+.bk-ico{width:32px;text-align:center;font-size:18px;flex-shrink:0}
+.adm-btn.soft{background:var(--accent-soft);color:var(--accent-d)}
+.bk-act{padding:10px 14px 14px}
+.set-foot{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 0 4px;margin-top:6px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);text-align:center}

@@ -246,6 +246,37 @@ async function weekly() {
   return pushTo([admin], { title: '📊 השבוע ב"בדרך לסופר"', body, tag: 'weekly', kind: 'admin', badge: 'badge-check.png', url: APP_URL });
 }
 
+// ---- backups: weekly snapshot of the app data (no secrets, no push endpoints), kept in public.backups ----
+const BACKUP_TABLES = ['households', 'members', 'items', 'trips', 'messages', 'custom_products', 'price_history',
+  'product_prices', 'purchases', 'product_barcodes', 'places', 'landings', 'landing_requests', 'deliveries',
+  'delivery_lines', 'asks', 'suspensions'];
+const BACKUP_KEEP = 10;
+async function gzip(bytes: Uint8Array) {
+  const cs = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(cs).arrayBuffer());
+}
+function b64(bytes: Uint8Array) {
+  let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+async function backup(kind: 'auto' | 'manual') {
+  const tables: Record<string, unknown> = {}, counts: Record<string, number> = {};
+  for (const t of BACKUP_TABLES) {
+    const [r] = await sql.unsafe(`select coalesce(jsonb_agg(x), '[]'::jsonb) rows from public."${t}" x`);
+    tables[t] = r.rows; counts[t] = (r.rows as unknown[]).length;
+  }
+  const [u] = await sql`select coalesce(jsonb_agg(jsonb_build_object('id', id, 'email', email, 'created_at', created_at,
+      'email_confirmed_at', email_confirmed_at)), '[]'::jsonb) rows from auth.users`;
+  tables['auth_users'] = u.rows; counts['auth_users'] = (u.rows as unknown[]).length;
+  const snap = { app: 'בדרך לסופר', format: 1, created_at: new Date().toISOString(), tables };
+  const data = await gzip(new TextEncoder().encode(JSON.stringify(snap)));
+  const [row] = await sql`insert into public.backups(kind, size_bytes, counts, data)
+                          values (${kind}, ${data.length}, ${sql.json(counts)}, ${data}) returning id, created_at`;
+  await sql`delete from public.backups where id not in (select id from public.backups order by created_at desc limit ${BACKUP_KEEP})`;
+  console.log(JSON.stringify({ kind: 'backup', type: kind, bytes: data.length, counts }));
+  return { ok: true, id: row.id, created_at: row.created_at, size_bytes: data.length };
+}
+
 // ---- owner's user management (only the admin_user may call these) ----
 async function adminAction(action: string, body: Record<string, unknown>, admin: string) {
   if (action === 'admin_list') {
@@ -265,6 +296,18 @@ async function adminAction(action: string, body: Record<string, unknown>, admin:
        order by h.created_at nulls last, m.joined_at`;
     const [mine] = await sql`select household_id from public.members where user_id = ${admin} limit 1`;
     return { users, myHousehold: mine?.household_id ?? null, admin };
+  }
+  if (action === 'admin_backups') {
+    const list = await sql`select id, created_at, kind, size_bytes, counts from public.backups order by created_at desc`;
+    return { backups: list };
+  }
+  if (action === 'admin_backup_now') return await backup('manual');
+  if (action === 'admin_backup_get') {
+    const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return { error: 'bad backup' };
+    const [b] = await sql`select created_at, data from public.backups where id = ${id}`;
+    if (!b) return { error: 'not found' };
+    console.log(JSON.stringify({ kind: 'admin', backup_download: id }));
+    return { created_at: b.created_at, gzip_b64: b64(new Uint8Array(b.data)) };
   }
   const uid = String(body.uid || '');
   if (!/^[0-9a-f-]{36}$/i.test(uid)) return { error: 'bad user' };
@@ -313,6 +356,12 @@ Deno.serve(async (req) => {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
       if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
       return json(await weekly());
+    }
+
+    if (action === 'backup') {
+      const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
+      if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
+      return json(await backup('auto'));
     }
 
     if (action === 'reminders') {
