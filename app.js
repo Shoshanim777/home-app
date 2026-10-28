@@ -61,7 +61,7 @@ for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { em
 const CUSTOM_TAB = 'שלנו';
 
 /* ---------------- state ---------------- */
-const APP_VERSION = 'v1.11.0';
+const APP_VERSION = 'v1.12.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -74,7 +74,7 @@ const S = {
   addText: '', history: LS.get('ha_history', {}),
   shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
   removing: new Map(), onboard: null, picker: null, sheetKind: null, orderDraft: null,
-  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], pkgs: [], loaded: false }, verifyEmail: LS.get('ha_verify', null), pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
+  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], pkgs: [], nudges: [], loaded: false }, verifyEmail: LS.get('ha_verify', null), pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
 };
 const REMOVE_MS = 3000;
 let channel = null;
@@ -300,6 +300,7 @@ function subscribe(force = false) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_lines', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'asks', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'packages', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'nudges', filter: f }, famReload)
     .on('broadcast', { event: 'heart' }, ({ payload }) => {
       if (payload?.to === S.user.id) { vibrate([60, 40, 60]); toast(nameOf(payload.from) + ' שלח/ה לך לב ❤'); }
     })
@@ -580,7 +581,7 @@ async function onForegroundPush(p) {
   if (p.kind === 'remind') { maybePromptConfirm(); return; }
   if (p.kind === 'trip' && S.trip && S.trip.shopper_id !== S.user.id) { showTripBanner(S.trip); return; }
   if (p.kind === 'thanks' || p.kind === 'test') { if (p.kind === 'test') toast(p.title + ' · ' + p.body); return; }
-  if (p.kind === 'land' || p.kind === 'delivery' || p.kind === 'ask' || p.kind === 'pkg') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
+  if (p.kind === 'land' || p.kind === 'delivery' || p.kind === 'ask' || p.kind === 'pkg' || p.kind === 'nudge') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
   if (p.title) { vibrate(80); showInfoBanner({ title: p.title, body: p.body, act: p.kind === 'message' ? 'chat' : '' }); }
 }
 
@@ -1261,12 +1262,13 @@ const STEPS = [['open', 'פתוחה'], ['ordered', 'הוזמן'], ['onway', 'ב�
 async function loadFamily(hid = S.household?.id) {
   if (!hid) return;
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const [pl, ld, dv, ak, pk] = await Promise.all([
+  const [pl, ld, dv, ak, pk, nd] = await Promise.all([
     sb.from('places').select('*').eq('household_id', hid),
     sb.from('landings').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
     sb.from('deliveries').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
     sb.from('asks').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(60),
-    sb.from('packages').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(40)
+    sb.from('packages').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(40),
+    sb.from('nudges').select('*').eq('household_id', hid).eq('status', 'active').order('created_at', { ascending: false }).limit(80)
   ]);
   if (pl.error || ld.error || dv.error) return;
   const lids = ld.data.map(x => x.id), dids = dv.data.map(x => x.id);
@@ -1274,7 +1276,7 @@ async function loadFamily(hid = S.household?.id) {
     lids.length ? sb.from('landing_requests').select('*').in('landing_id', lids).order('created_at') : { data: [] },
     dids.length ? sb.from('delivery_lines').select('*').in('delivery_id', dids).order('created_at') : { data: [] }
   ]);
-  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], asks: ak.error ? [] : ak.data, pkgs: pk.error ? [] : pk.data, loaded: true };
+  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], asks: ak.error ? [] : ak.data, pkgs: pk.error ? [] : pk.data, nudges: nd.error ? [] : nd.data, loaded: true };
   if (S.tab === 'family' && !famTyping()) render();
   if (S.sheetKind === 'landing') refreshLandingStars();
 }
@@ -1457,15 +1459,17 @@ function renderFamily() {
   return top + `<div class="fam">
     ${D ? deliveryCard(D) : ''}
     ${L ? (L.user_id === S.user.id ? myLandingCard(L) : theirLandingCard(L)) : ''}
+    ${S.fam.nudges.some(nudgeOpenForMe) ? nudgesSection() : ''}
     ${S.fam.pkgs.some(pkgLive) ? pkgSection() : ''}
     ${asksSection()}
+    ${S.fam.nudges.some(nudgeOpenForMe) ? '' : nudgesSection()}
     ${S.fam.pkgs.some(pkgLive) ? '' : pkgSection()}
     ${L && L.user_id === S.user.id ? '' : landingCard()}
     ${D ? '' : deliveryPromo()}
     ${familyFeed()}
   </div>`;
 }
-const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || S.fam.asks.some(a => a.status === 'open' && askForMe(a)) || S.fam.pkgs.some(p => p.status === 'open' && p.user_id !== S.user?.id) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
+const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || S.fam.asks.some(a => a.status === 'open' && askForMe(a)) || S.fam.pkgs.some(p => p.status === 'open' && p.user_id !== S.user?.id) || S.fam.nudges.some(n => S.user && nudgeOpenForMe(n) && !nudgeMyAck(n)) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
 
 function landingSheetHtml() {
   const favs = favPlaces(), favNames = new Set(favs.map(p => p.name));
@@ -1736,7 +1740,7 @@ function landingPkgBox(L) {
 }
 
 /* ---- one-time "what's new" after an update ---- */
-const WHATS_NEW = { id: 'pkg-lights-2026-10', title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 עם נורה צבעונית ו־🐢 אקח בהמשך · תהנו!' };
+const WHATS_NEW = { id: 'nudges-2026-10', title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: '🎗️ אל תשכחו: תזכורות למשפחה, עכשיו או בזמן שתבחרו · תהנו!' };
 let whatsNewTries = 0;
 function maybeWhatsNew() {
   // per announcement (not per version), so a quick fix release doesn't hide it or show it twice
@@ -1745,6 +1749,150 @@ function maybeWhatsNew() {
   if (!S.household || S.locked || S.cover || S.booting || document.hidden) { if (whatsNewTries++ < 60) setTimeout(maybeWhatsNew, 2000); return; }
   LS.set('ha_seen_news', [...seen, WHATS_NEW.id].slice(-20));
   if (S.wasUser) showInfoBanner({ title: WHATS_NEW.title, body: WHATS_NEW.body, act: 'whats-new', persistent: true });
+}
+
+/* ---------------- "🎗️ אל תשכחו": family reminders ---------------- */
+const NUDGE_TPL = [['🔑', 'לקחת מפתחות'], ['🗑️', 'להוציא את הפחים'], ['🔥', 'לכבות את הדוד'], ['💊', 'לקחת תרופה'], ['🐕', 'להוציא את הכלב'], ['🔒', 'לנעול את הדלת'], ['🎒', 'לקחת את התיק']];
+const nudgeThanked = new Set(LS.get('ha_nudge_thanked', []));
+const nudgeForMe = n => n.status === 'active' && (n.to_all ? n.user_id !== S.user.id : (n.to_users || []).includes(S.user.id));
+const nudgeMyAck = n => (n.acks || {})[S.user.id] || '';
+const nudgeOpenForMe = n => nudgeForMe(n) && n.fired_at && !n.done_at && nudgeMyAck(n) !== 'done';
+const nudgeTargetsOf = n => n.to_all ? Object.keys(S.members).filter(id => id !== n.user_id) : (n.to_users || []);
+function nudgeLight(n, uid) {
+  if (n.done_at) return 'green';
+  const a = n.acks || {};
+  if (uid) return a[uid] === 'done' ? 'green' : a[uid] === 'got' ? 'yellow' : 'red';
+  return Object.values(a).includes('got') || Object.values(a).includes('done') ? 'yellow' : 'red';
+}
+function nudgeWhenLabel(t) {
+  const d = new Date(t), today = new Date(new Date().toDateString());
+  const days = Math.round((new Date(d.toDateString()) - today) / 864e5);
+  const day = days === 0 ? 'היום' : days === 1 ? 'מחר' : d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
+  return `${day} ${hhmm(t)}`;
+}
+const nudgeRepeatLabel = n => n.repeat === 'daily' ? 'כל יום ' + hhmm(n.remind_at) : n.repeat === 'weekly' ? 'כל יום ' + new Date(n.remind_at).toLocaleDateString('he-IL', { weekday: 'long' }).replace(/^יום /, '') + ' ' + hhmm(n.remind_at) : '';
+const nudgeToLabel = n => n.to_all ? 'לכל הבית' : (n.to_users || []).map(id => id === S.user.id ? (n.user_id === S.user.id ? 'לעצמי' : 'לך') : nameOf(id)).join(', ');
+
+function nudgeCard(n) {
+  const mine = n.user_id === S.user.id, forMe = nudgeOpenForMe(n);
+  const rep = nudgeRepeatLabel(n);
+  let meta = '', acts = '', lights = '';
+  if (!n.fired_at) meta = `⏰ יישלח ${nudgeWhenLabel(n.remind_at)}`;
+  else if (n.done_at) meta = `✓ ${n.done_by === S.user.id ? 'ביצעת' : esc(nameOf(n.done_by)) + ' ביצע/ה'} · ${relDay(n.done_at)}`;
+  else meta = `נשלח ${relDay(n.fired_at) === 'היום' ? 'היום ' + hhmm(n.fired_at) : relDay(n.fired_at)}`;
+  if (forMe) {
+    const sole = !n.to_all && (n.to_users || []).length === 1;
+    acts = `<div class="row2">${nudgeMyAck(n) === 'got' ? '<span class="ask-st plan nd-got">👍 קיבלת</span>' : `<button class="ask-btn ghost" data-act="nudge-got" data-id="${n.id}">👍 קיבלתי</button>`}
+      <button class="ask-btn green" data-act="nudge-done" data-id="${n.id}">✓ בוצע</button></div>
+      ${sole ? `<button class="link nd-snooze" data-act="nudge-snooze" data-id="${n.id}">⏰ תזכירו לי אחר כך</button>` : ''}`;
+  }
+  if (mine && n.fired_at) {
+    const ids = n.to_all ? [] : nudgeTargetsOf(n).filter(id => id !== S.user.id);
+    lights = n.to_all ? `<span class="nd-who"><i class="pkg-lamp ${nudgeLight(n)}"></i>${n.done_at ? 'טופל' : Object.keys(n.acks || {}).length ? 'מישהו ראה' : 'עוד לא ראו'}</span>`
+      : ids.map(id => `<span class="nd-who"><i class="pkg-lamp ${nudgeLight(n, id)}"></i>${esc(nameOf(id))}</span>`).join('');
+    if (n.done_at && n.done_by && n.done_by !== S.user.id && !nudgeThanked.has(n.id + n.fired_at)) acts += `<button class="ask-btn pink" data-act="nudge-thanks" data-id="${n.id}">❤ תודה ל${esc(nameOf(n.done_by))}</button>`;
+  }
+  return `<div class="nd ${forMe ? 'me' : ''} ${n.done_at && !rep ? 'done' : ''}">
+    <div class="ask-top"><span class="nd-ico" aria-hidden="true">${esc(n.icon || '🎗️')}${forMe || (mine && n.fired_at) ? `<i class="pkg-lamp ${forMe ? (nudgeMyAck(n) === 'got' ? 'yellow' : 'red') : nudgeLight(n)}"></i>` : ''}</span>
+      <div class="ask-t"><b>${esc(n.body)}</b><small>${mine ? 'ממך ' + esc(nudgeToLabel(n)) : esc(nameOf(n.user_id)) + ' · ' + esc(nudgeToLabel(n))} · ${meta}</small>
+        ${rep ? `<span class="nd-rep">🔁 ${rep}</span>` : ''}</div>
+      ${mine ? `<button class="nd-x" data-act="nudge-cancel" data-id="${n.id}" aria-label="ביטול התזכורת">${I.x}</button>` : ''}</div>
+    ${lights ? `<div class="nd-lights">${lights}</div>` : ''}${acts}</div>`;
+}
+function nudgesSection() {
+  const all = S.fam.nudges.filter(n => n.status === 'active');
+  const forMe = all.filter(nudgeOpenForMe);
+  const mineList = all.filter(n => n.user_id === S.user.id && !forMe.includes(n) && (!n.fired_at || n.repeat !== 'none' || !n.done_at || Date.now() - new Date(n.done_at).getTime() < 24 * 3600e3) && (n.repeat !== 'none' || !n.fired_at || Date.now() - new Date(n.fired_at).getTime() < 3 * 864e5));
+  const list = [...forMe, ...mineList];
+  return `<section class="fam-card nd-card">
+    <div class="fam-h"><div><h2>אל תשכחו</h2><p>תזכורות בבית: למישהו, לכמה, או לכולם</p></div><img class="fam-ill" src="icons/nudge.svg" alt=""></div>
+    ${list.length ? `<div class="asks">${list.map(nudgeCard).join('')}</div>` : '<div class="req-empty ask-empty">אין תזכורות פתוחות. רוצים להזכיר משהו למישהו בבית? עכשיו, או בזמן שתבחרו.</div>'}
+    <button class="btn ink fam-btn" data-act="nudge-new">+ תזכורת חדשה</button>
+  </section>`;
+}
+function nudgeSheetHtml() {
+  const others = Object.values(S.members).filter(m => m.user_id !== S.user.id);
+  const nextHour = new Date(Date.now() + 3600e3); nextHour.setMinutes(0, 0, 0);
+  const pad = n => String(n).padStart(2, '0');
+  return `${sheetHead('🎗️ תזכורת חדשה')}
+    <form data-form="nudge" class="ask-form">
+      <div class="nd-tpl" role="group" aria-label="תזכורות מוכנות">${NUDGE_TPL.map(([i, t]) => `<button type="button" class="chip" data-act="nudge-tpl" data-i="${i}" data-t="${t}">${i} ${t}</button>`).join('')}</div>
+      <div class="field"><label for="nd-body">מה להזכיר?</label><input id="nd-body" name="body" maxlength="120" required autocomplete="off" placeholder="למשל: לקחת את התיק לחוג"><input type="hidden" name="icon" id="nd-icon" value=""></div>
+      <fieldset class="seg nd-to"><legend>למי</legend>
+        <label><input type="checkbox" name="all" value="1" id="nd-all"><span>כל הבית</span></label>
+        ${others.map(m => `<label><input type="checkbox" name="to" value="${m.user_id}" ${others.length === 1 ? 'checked' : ''}><span>${esc(m.display_name)}</span></label>`).join('')}
+        <label><input type="checkbox" name="to" value="${S.user.id}"><span>לעצמי</span></label></fieldset>
+      <fieldset class="seg"><legend>מתי</legend>
+        <label><input type="radio" name="when" value="now" checked><span>עכשיו</span></label>
+        <label><input type="radio" name="when" value="today"><span>היום ב־</span></label>
+        <label><input type="radio" name="when" value="tomorrow"><span>מחר ב־</span></label>
+        <label><input type="radio" name="when" value="date"><span>בתאריך</span></label></fieldset>
+      <div class="pkg-grid nd-time" id="nd-time" hidden>
+        <div class="field" id="nd-date-f" hidden><label for="nd-date">תאריך</label><input id="nd-date" name="date" type="date" value="${new Date(Date.now() + 864e5).toLocaleDateString('sv-SE')}"></div>
+        <div class="field"><label for="nd-hour">שעה</label><input id="nd-hour" name="time" type="time" value="${pad(nextHour.getHours())}:00"></div>
+      </div>
+      <fieldset class="seg"><legend>לחזור על זה</legend>
+        <label><input type="radio" name="repeat" value="none" checked><span>פעם אחת</span></label>
+        <label><input type="radio" name="repeat" value="daily"><span>כל יום</span></label>
+        <label><input type="radio" name="repeat" value="weekly"><span>כל שבוע</span></label></fieldset>
+      <label class="tgl"><input type="checkbox" name="urgent" value="1"><span>דחוף: לשלוח גם בשעות השקט (<bdi dir="ltr">22:00–7:00</bdi>)</span></label>
+      <div class="err" id="nd-err"></div>
+      <button class="btn violet" type="submit">שליחת התזכורת</button>
+    </form>`;
+}
+function openNudgeForm() { openSheet(nudgeSheetHtml(), 'tall scroll', 'nudge'); setTimeout(() => document.getElementById('nd-body')?.focus(), 250); }
+function nudgeFormChanged() {
+  const f = document.querySelector('form[data-form="nudge"]'); if (!f) return;
+  const when = f.querySelector('input[name="when"]:checked')?.value;
+  document.getElementById('nd-time').hidden = when === 'now';
+  document.getElementById('nd-date-f').hidden = when !== 'date';
+  const hour = document.getElementById('nd-hour');
+  if (when === 'tomorrow' && !hour.dataset.touched) hour.value = '08:00';
+  const all = document.getElementById('nd-all')?.checked;
+  f.querySelectorAll('input[name="to"]').forEach(x => { x.disabled = all; });
+}
+async function newNudge(fd, form) {
+  const err = t => { const e = document.getElementById('nd-err'); if (e) e.textContent = t; };
+  const body = String(fd.body || '').trim().slice(0, 120); if (!body) return;
+  const to = [...form.querySelectorAll('input[name="to"]:checked')].map(x => x.value).filter(id => S.members[id]);
+  const toAll = !!fd.all;
+  if (!toAll && !to.length) return err('בחרו למי לשלוח');
+  let at = new Date();
+  const [h, m] = String(fd.time || '08:00').split(':').map(Number);
+  if (fd.when === 'today') { at.setHours(h, m, 0, 0); }
+  else if (fd.when === 'tomorrow') { at.setDate(at.getDate() + 1); at.setHours(h, m, 0, 0); }
+  else if (fd.when === 'date') { at = new Date((fd.date || '') + 'T' + (fd.time || '08:00')); }
+  if (isNaN(at.getTime())) return err('בדקו את התאריך והשעה');
+  if (fd.when !== 'now' && at.getTime() < Date.now() - 60e3) return err('השעה הזו כבר עברה');
+  const row = { household_id: S.household.id, user_id: S.user.id, body, icon: String(fd.icon || '').slice(0, 12), to_all: toAll, to_users: toAll ? [] : to,
+    remind_at: at.toISOString(), repeat: ['daily', 'weekly'].includes(fd.repeat) ? fd.repeat : 'none', urgent: !!fd.urgent, status: 'active' };
+  const { data, error } = await sb.from('nudges').insert(row).select().single();
+  if (error) return famErr(error);
+  if (fd.when === 'now') data.fired_at = data.fired_at || new Date().toISOString();
+  S.fam.nudges.unshift(data); closeSheet(); S.tab = 'family'; render(); vibrate(30);
+  const h2 = at.getHours();
+  const quiet = !row.urgent && (h2 < 7 || h2 >= 22);
+  toast(fd.when === 'now' ? (quiet ? 'נשמר. יישלח ב־7:00 (שעות שקט)' : 'התזכורת נשלחה 🎗️') : 'התזכורת תישלח ' + nudgeWhenLabel(row.remind_at));
+  if (fd.when === 'now' && !quiet) setTimeout(famReload, 2500);
+}
+async function nudgeAck(id, state, until) {
+  const n = S.fam.nudges.find(x => x.id === id); if (!n) return;
+  const { error } = await sb.rpc('nudge_ack', { n: id, state, until: until || null });
+  if (error) return famErr(error);
+  if (state === 'snooze') { n.remind_at = until; n.fired_at = null; n.acks = {}; closeSheet(); toast('נזכיר ' + nudgeWhenLabel(until) + ' ⏰'); }
+  else {
+    n.acks = { ...(n.acks || {}), [S.user.id]: state };
+    if (state === 'done' && (n.to_all || nudgeTargetsOf(n).every(u => n.acks[u] === 'done'))) { n.done_at = new Date().toISOString(); n.done_by = S.user.id; }
+    toast(state === 'done' ? (n.user_id === S.user.id ? 'סומן ✓' : nameOf(n.user_id) + ' קיבל/ה הודעה ✓') : '👍 ' + nameOf(n.user_id) + ' רואה שקיבלת');
+  }
+  render(); vibrate(25);
+}
+function nudgeSnoozeHtml(n) {
+  const at = (off, hh) => { const d = new Date(); d.setDate(d.getDate() + off); d.setHours(hh, 0, 0, 0); return d; };
+  const opts = [['עוד שעה', new Date(Date.now() + 3600e3)], ...(new Date().getHours() < 19 ? [['בערב (19:00)', at(0, 19)]] : []), ['מחר בבוקר (8:00)', at(1, 8)]];
+  return `${sheetHead('⏰ תזכירו לי אחר כך')}
+    <div class="lead">${esc(n.body)}</div>
+    <div class="pkg-plan-opts">${opts.map(([t, d]) => `<button class="btn soft" data-act="nudge-snooze-set" data-id="${n.id}" data-until="${d.toISOString()}">${t}</button>`).join('')}</div>`;
 }
 
 const ASK_PLACES = [['pharm', '💊 בית מרקחת'], ['home', '🔧 כלי בית'], ['post', '📮 דואר'], ['fuel', '⛽ תחנת דלק'], ['store', '🏪 מכולת'], ['any', 'איפה שיש']];
@@ -2309,6 +2457,16 @@ document.addEventListener('click', async e => {
     case 'del-open': openDeliveryForm(); break;
     case 'ask-new': openAskForm(); break;
     case 'pkg-new': openPkgForm(); break;
+    case 'nudge-new': openNudgeForm(); break;
+    case 'nudge-tpl': { const i = document.getElementById('nd-body'), ic = document.getElementById('nd-icon'); if (i) { i.value = b.dataset.t; i.focus(); } if (ic) ic.value = b.dataset.i; document.querySelectorAll('.nd-tpl .chip').forEach(c => c.classList.toggle('pick', c === b)); break; }
+    case 'nudge-got': nudgeAck(b.dataset.id, 'got'); break;
+    case 'nudge-done': nudgeAck(b.dataset.id, 'done'); break;
+    case 'nudge-snooze': { const n = S.fam.nudges.find(x => x.id === b.dataset.id); if (n) openSheet(nudgeSnoozeHtml(n), '', 'nudge-snooze'); break; }
+    case 'nudge-snooze-set': nudgeAck(b.dataset.id, 'snooze', b.dataset.until); break;
+    case 'nudge-cancel': { const n = S.fam.nudges.find(x => x.id === b.dataset.id); if (!n) break;
+      sb.from('nudges').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', n.id).then(({ error }) => { if (error) return famErr(error); n.status = 'cancelled'; render(); toast('התזכורת בוטלה'); }); break; }
+    case 'nudge-thanks': { const n = S.fam.nudges.find(x => x.id === b.dataset.id); if (!n) break; nudgeThanked.add(n.id + n.fired_at); LS.set('ha_nudge_thanked', [...nudgeThanked].slice(-60)); render();
+      sendMessage({ body: `❤ תודה על "${n.body}"!` }).then(() => toast('התודה נשלחה ל' + nameOf(n.done_by) + ' ❤')); break; }
     case 'pkg-take': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p && p.status !== 'open') { toast(nameOf(p.taker_id) + ' כבר על זה'); break; }
       closeSheet(); pkgPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id, plan_by: null, plan_when: null, plan_remind_at: null, plan_until: null, remind_plan: false }, 'מעולה! כולם יודעים שאת/ה על זה').then(() => openPkgGo(b.dataset.id)); break; }
     case 'pkg-plan': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p) { openSheet(pkgPlanHtml(p), '', 'pkg-plan'); if (p.user_id !== S.user.id && !(p.seen_by || []).includes(S.user.id)) { p.seen_by = [...(p.seen_by || []), S.user.id]; sb.rpc('pkg_seen', { p: p.id }).then(() => {}, () => {}); } } break; }
@@ -2346,7 +2504,7 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('input', e => { if (e.target.id === 'pkg-sms') applyPkgSms(e.target.value); if (e.target.name === 'kind' && e.target.closest('form[data-form="pkg"]')) pkgKindChanged(); if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); if (e.target.id === 'ask-body') updateAskHint(e.target.value); });
+document.addEventListener('input', e => { if (e.target.closest?.('form[data-form="nudge"]')) { if (e.target.id === 'nd-hour') e.target.dataset.touched = '1'; nudgeFormChanged(); } if (e.target.id === 'pkg-sms') applyPkgSms(e.target.value); if (e.target.name === 'kind' && e.target.closest('form[data-form="pkg"]')) pkgKindChanged(); if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); if (e.target.id === 'ask-body') updateAskHint(e.target.value); });
 
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]'); if (!f) return;
@@ -2359,6 +2517,7 @@ document.addEventListener('submit', async e => {
     case 'del-new': openDeliveryNow(fd); break;
     case 'ask': newAsk(fd); break;
     case 'pkg': newPkg(fd); break;
+    case 'nudge': newNudge(fd, f); break;
     case 'forgot': {
       const email = String(fd.email || '').trim(); if (!email) break;
       S.busy = true; S.forgotEmail = email; render();

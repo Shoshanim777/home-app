@@ -79,7 +79,7 @@ async function reminders() {
       tag: 'remind-' + t.id, url: APP_URL + '?confirm=1', requireInteraction: true, kind: 'remind', badge: 'badge-clock.png', icon: 'notif-trip.png'
     });
   }
-  return { reminded: due.length, asks: await askReminders(), packages: await pkgReminders() };
+  return { reminded: due.length, asks: await askReminders(), packages: await pkgReminders(), nudges: await nudgeRun() };
 }
 
 // a request nobody took for two days gets one gentle nudge
@@ -254,6 +254,69 @@ async function pkgReminders() {
   return dueSoon.length + late.length + planDue.length + expired.length;
 }
 
+// ---- "אל תשכחו": family reminders ----
+const NUDGE = { icon: 'notif-nudge.png', badge: 'badge-bell.png', kind: 'nudge' };
+const NUDGE_URL = APP_URL + '?family=nudge';
+const ilHour = () => Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem', hour: 'numeric', hourCycle: 'h23' }));
+const quietNow = () => { const h = ilHour(); return h < 7 || h >= 22; };
+async function nudgeTargets(n: Record<string, unknown>) {
+  if (n.to_all) return (await othersInHousehold(n.household_id as string, n.user_id as string));
+  return (n.to_users as string[]) || [];
+}
+async function nudgeFire(n: Record<string, unknown>) {
+  if (n.status !== 'active' || (quietNow() && !n.urgent)) return 0;
+  const step = n.repeat === 'daily' ? 864e5 : n.repeat === 'weekly' ? 7 * 864e5 : 0;
+  let next = new Date(n.remind_at as string).getTime();
+  if (step) while (next <= Date.now()) next += step;
+  // claim it first so two runs never send twice
+  const claimed = await sql`
+    update public.nudges set fired_at = now(), acks = '{}'::jsonb, done_at = null, done_by = null, nag1 = false, nag2 = false,
+           remind_at = ${new Date(step ? next : new Date(n.remind_at as string).getTime()).toISOString()}, updated_at = now()
+     where id = ${n.id} and status = 'active' and remind_at <= now() + interval '1 minute' and (repeat <> 'none' or fired_at is null)
+     returning id`;
+  if (!claimed.length) return 0;
+  const sender = await nameIn(n.household_id as string, n.user_id as string);
+  const to = await nudgeTargets(n);
+  const self = !n.to_all && to.length === 1 && to[0] === n.user_id;
+  await pushTo(to, { title: `🎗️ ${self ? 'תזכורת' : sender}: ${n.body}`,
+    body: n.to_all ? 'תזכורת לכל הבית · מי מטפל?' : n.repeat !== 'none' ? (n.repeat === 'daily' ? 'תזכורת יומית' : 'תזכורת שבועית') + ' · לסמן ✓ כשסיימת' : 'לסמן 👍 קיבלתי, ו־✓ כשסיימת',
+    tag: 'nudge-' + n.id, url: NUDGE_URL, ...NUDGE, requireInteraction: !!n.urgent });
+  return 1;
+}
+async function nudgeRun() {
+  let sent = 0;
+  const due = await sql`select * from public.nudges where status = 'active' and remind_at <= now() and (repeat <> 'none' or fired_at is null) limit 50`;
+  for (const n of due) sent += await nudgeFire(n);
+  if (quietNow()) return sent;
+  // a gentle second nudge: nothing after an hour, or "got it" but not done after three
+  const nag1 = await sql`update public.nudges set nag1 = true
+     where status = 'active' and fired_at is not null and done_at is null and not nag1 and fired_at < now() - interval '1 hour' and fired_at > now() - interval '1 day'
+     returning *`;
+  for (const n of nag1) {
+    const to = (await nudgeTargets(n)).filter((u) => !n.acks?.[u]);
+    if (n.to_all && Object.keys(n.acks || {}).length) continue;
+    if (to.length) { await pushTo(to, { title: `⏰ עדיין: ${n.body}`, body: 'לחיצה כדי לסמן 👍 או ✓', tag: 'nudge-' + n.id, url: NUDGE_URL, ...NUDGE }); sent++; }
+  }
+  const nag2 = await sql`update public.nudges set nag2 = true
+     where status = 'active' and fired_at is not null and done_at is null and not nag2 and fired_at < now() - interval '3 hours' and fired_at > now() - interval '1 day'
+     returning *`;
+  for (const n of nag2) {
+    const to = (await nudgeTargets(n)).filter((u) => n.acks?.[u] === 'got');
+    if (to.length) { await pushTo(to, { title: `✓ סיימת? ${n.body}`, body: 'אם כן, לסמן ✓ בוצע', tag: 'nudge-' + n.id, url: NUDGE_URL, ...NUDGE }); sent++; }
+  }
+  return sent;
+}
+async function nudgeEvent(type: string, id: string) {
+  const [n] = await sql`select * from public.nudges where id = ${id}`;
+  if (!n) return { sent: 0 };
+  if (type === 'nudge_new') return { sent: await nudgeFire(n) };
+  if (type === 'nudge_done' && n.done_by && n.done_by !== n.user_id) {
+    const doer = await nameIn(n.household_id, n.done_by);
+    return pushTo([n.user_id], { title: `✓ ${doer} ביצע/ה: ${n.body}`, body: 'אפשר לשלוח תודה ❤', tag: 'nudge-' + id, url: NUDGE_URL, ...NUDGE, badge: 'badge-check.png' });
+  }
+  return { sent: 0 };
+}
+
 async function familyEvent(type: string, id: string) {
   const LAND = { icon: 'notif-land.png', badge: 'badge-moto.png', kind: 'land' };
   const DEL = { icon: 'notif-deliver.png', badge: 'badge-pizza.png', kind: 'delivery' };
@@ -333,7 +396,8 @@ async function weekly() {
           union all select household_id from public.landings where created_at > now() - interval '7 days'
           union all select household_id from public.deliveries where created_at > now() - interval '7 days'
           union all select household_id from public.asks where created_at > now() - interval '7 days'
-          union all select household_id from public.packages where created_at > now() - interval '7 days') x
+          union all select household_id from public.packages where created_at > now() - interval '7 days'
+          union all select household_id from public.nudges where created_at > now() - interval '7 days') x
         where household_id <> ${ex})::int active,
       (select count(*) from public.trips where status = 'done' and finished_at > now() - interval '7 days' and household_id <> ${ex})::int trips,
       (select count(*) from public.members where joined_at > now() - interval '7 days' and household_id <> ${ex})::int joined`;
@@ -441,6 +505,10 @@ Deno.serve(async (req) => {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
       if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
       if (body.type === 'member_join') return json(await memberJoin(String(body.hid || ''), String(body.uid || '')));
+      if (String(body.type || '').startsWith('nudge_')) {
+        const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ sent: 0 });
+        return json(await nudgeEvent(String(body.type), id));
+      }
       if (String(body.type || '').startsWith('pkg_')) {
         const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ sent: 0 });
         return json(await pkgEvent(String(body.type), id, String(body.from || '')));
