@@ -79,7 +79,7 @@ async function reminders() {
       tag: 'remind-' + t.id, url: APP_URL + '?confirm=1', requireInteraction: true, kind: 'remind', badge: 'badge-clock.png', icon: 'notif-trip.png'
     });
   }
-  return { reminded: due.length, asks: await askReminders() };
+  return { reminded: due.length, asks: await askReminders(), packages: await pkgReminders() };
 }
 
 // a request nobody took for two days gets one gentle nudge
@@ -157,6 +157,73 @@ async function askEvent(type: string, id: string, from: string) {
   if (a.status === 'done') return pushTo([a.user_id], { title: `✓ ${actor} הביא/ה לך ${a.body}`, body: 'לשלוח תודה?', tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK, badge: 'badge-check.png' });
   if (a.status === 'open' && from === 'taken') return pushTo([a.user_id], { title: `${actor} לא יספיק/תספיק להביא ${a.body}`, body: 'הבקשה חזרה להיות פתוחה', tag: 'ask-' + id, url: APP_URL + '?family=ask', ...ASK });
   return { sent: 0 };
+}
+
+// ---- "החבילה עוברת": packages waiting for pickup ----
+const PKG = { icon: 'notif-pkg.png', badge: 'badge-pkg.png', kind: 'pkg' };
+const PKG_URL = APP_URL + '?family=pkg';
+const pkgOwner = (p: Record<string, unknown>, poster: string) => (p.owner_name as string) || poster;
+const pkgPlace = (p: Record<string, unknown>) => (p.place as string) || 'נקודת האיסוף';
+function pkgDue(d: string | Date | null) {
+  if (!d) return '';
+  const day = new Date(d).toISOString().slice(0, 10);
+  const il = (off: number) => new Date(Date.now() + off * 864e5).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jerusalem' });
+  if (day === il(0)) return 'עד היום';
+  if (day === il(1)) return 'עד מחר';
+  return 'עד ' + new Date(day + 'T12:00:00Z').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
+}
+async function pkgEvent(type: string, id: string, from: string) {
+  const [p] = await sql`select * from public.packages where id = ${id}`;
+  if (!p) return { sent: 0 };
+  const poster = await nameIn(p.household_id, p.user_id);
+  const owner = pkgOwner(p, poster), place = pkgPlace(p);
+  if (type === 'pkg_new') {
+    return pushTo(await othersInHousehold(p.household_id, p.user_id), { title: `📦 חבילה של ${owner} מחכה לאיסוף`,
+      body: [place, pkgDue(p.due), 'מי לוקח?'].filter(Boolean).join(' · '), tag: 'pkg-' + id, url: PKG_URL, ...PKG });
+  }
+  const by = (p.updated_by as string) || p.user_id;
+  const actor = await nameIn(p.household_id, by);
+  const others = await othersInHousehold(p.household_id, by);
+  if (p.status === 'taken' && from === 'open')
+    return pushTo(others, { title: `📦 ${actor} על זה`, body: `יאסוף/תאסוף את החבילה של ${owner} · ${place}`, tag: 'pkg-' + id, url: PKG_URL, ...PKG });
+  if (p.status === 'arrived') {
+    if (by === p.user_id) return { sent: 0 };
+    return pushTo([p.user_id], { title: `📍 ${actor} הגיע/ה ל${place}`, body: `אוספים עכשיו את החבילה של ${owner}`, tag: 'pkg-' + id, url: PKG_URL, ...PKG });
+  }
+  if (p.status === 'done') {
+    if (by === p.user_id && from === 'open')
+      return pushTo(others, { title: `📦 ${actor} אסף/ה את החבילה בעצמו/ה`, body: `${place} · אין צורך לאסוף`, tag: 'pkg-' + id, url: PKG_URL, ...PKG, badge: 'badge-check.png' });
+    return pushTo(others, { title: `📦 החבילה של ${owner} אצל ${actor}!`, body: `נאספה מ${place}`, tag: 'pkg-' + id, url: PKG_URL, ...PKG, badge: 'badge-check.png' });
+  }
+  if (p.status === 'open' && (from === 'taken' || from === 'arrived'))
+    return pushTo(others, { title: `${actor} לא יספיק/תספיק לאסוף`, body: `החבילה של ${owner} שוב מחכה · ${place} · מי לוקח?`, tag: 'pkg-' + id, url: PKG_URL, ...PKG });
+  return { sent: 0 };
+}
+// one nudge the day before the last pickup day (from 10:00), one to the taker at 21:00 if not marked "אצלי"
+async function pkgReminders() {
+  const dueSoon = await sql`
+    update public.packages set remind_due = true
+     where status = 'open' and not remind_due and due is not null
+       and due <= (now() at time zone 'Asia/Jerusalem')::date + 1
+       and extract(hour from now() at time zone 'Asia/Jerusalem') >= 10
+     returning id, household_id, user_id, owner_name, place, due`;
+  for (const p of dueSoon) {
+    const poster = await nameIn(p.household_id, p.user_id);
+    const members = await sql`select user_id from public.members where household_id = ${p.household_id}`;
+    const last = pkgDue(p.due) === 'עד היום' ? 'היום היום האחרון לאסוף' : 'מחר נגמר הזמן לאסוף';
+    await pushTo(members.map((m) => m.user_id as string), { title: `⏰ ${last}`, body: `החבילה של ${pkgOwner(p, poster)} עדיין ב${pkgPlace(p)} · מי לוקח?`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
+  }
+  const late = await sql`
+    update public.packages set remind_taker = true
+     where status in ('taken', 'arrived') and not remind_taker and taker_id is not null
+       and updated_at < now() - interval '1 hour'
+       and extract(hour from now() at time zone 'Asia/Jerusalem') >= 21
+     returning id, household_id, user_id, owner_name, taker_id`;
+  for (const p of late) {
+    const poster = await nameIn(p.household_id, p.user_id);
+    await pushTo([p.taker_id as string], { title: '📦 החבילה אצלך?', body: `אם כבר אספת את החבילה של ${pkgOwner(p, poster)}, סמן/י "החבילה אצלי"`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
+  }
+  return dueSoon.length + late.length;
 }
 
 async function familyEvent(type: string, id: string) {
@@ -237,7 +304,8 @@ async function weekly() {
           union all select household_id from public.purchases where created_at > now() - interval '7 days'
           union all select household_id from public.landings where created_at > now() - interval '7 days'
           union all select household_id from public.deliveries where created_at > now() - interval '7 days'
-          union all select household_id from public.asks where created_at > now() - interval '7 days') x
+          union all select household_id from public.asks where created_at > now() - interval '7 days'
+          union all select household_id from public.packages where created_at > now() - interval '7 days') x
         where household_id <> ${ex})::int active,
       (select count(*) from public.trips where status = 'done' and finished_at > now() - interval '7 days' and household_id <> ${ex})::int trips,
       (select count(*) from public.members where joined_at > now() - interval '7 days' and household_id <> ${ex})::int joined`;
@@ -345,6 +413,10 @@ Deno.serve(async (req) => {
       const [row] = await sql`select value from public.app_secrets where name = 'cron'`;
       if (!row || req.headers.get('x-cron-secret') !== row.value) return json({ error: 'forbidden' }, 403);
       if (body.type === 'member_join') return json(await memberJoin(String(body.hid || ''), String(body.uid || '')));
+      if (String(body.type || '').startsWith('pkg_')) {
+        const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ sent: 0 });
+        return json(await pkgEvent(String(body.type), id, String(body.from || '')));
+      }
       if (String(body.type || '').startsWith('ask_')) {
         const id = String(body.id || ''); if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ sent: 0 });
         return json(await askEvent(String(body.type), id, String(body.from || '')));

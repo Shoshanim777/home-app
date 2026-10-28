@@ -61,7 +61,7 @@ for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { em
 const CUSTOM_TAB = 'שלנו';
 
 /* ---------------- state ---------------- */
-const APP_VERSION = 'v1.9.3';
+const APP_VERSION = 'v1.10.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -74,7 +74,7 @@ const S = {
   addText: '', history: LS.get('ha_history', {}),
   shownThanks: new Set(LS.get('ha_shown_thanks', [])), confirmFor: null,
   removing: new Map(), onboard: null, picker: null, sheetKind: null, orderDraft: null,
-  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], loaded: false }, verifyEmail: LS.get('ha_verify', null), pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
+  lastRead: 0, fam: { places: [], landings: [], reqs: [], dels: [], lines: [], asks: [], pkgs: [], loaded: false }, verifyEmail: LS.get('ha_verify', null), pushPerm: 'default', pushDismissed: LS.get('ha_push_dismissed', false)
 };
 const REMOVE_MS = 3000;
 let channel = null;
@@ -123,6 +123,7 @@ function saveCache() {
 }
 function loadCache() {
   const c = LS.get('ha_cache_' + S.user.id, null);
+  S.wasUser = !!(c && c.household);
   if (c) Object.assign(S, { household: c.household, members: c.members || {}, items: c.items || [], trip: c.trip, messages: c.messages || [], custom: c.custom || [], prices: c.prices || {}, recent: c.recent || { trips: [], purchases: [] } });
   S.lastRead = LS.get('ha_lastread_' + S.user.id, 0);
   rebuildProducts();
@@ -257,6 +258,7 @@ async function loadAll() {
   loadFamily(hid);
   saveCache();
   subscribe();
+  maybeWhatsNew();
 }
 
 function mergePending(serverItems) {
@@ -297,6 +299,7 @@ function subscribe(force = false) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_lines', filter: f }, famReload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'asks', filter: f }, famReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'packages', filter: f }, famReload)
     .on('broadcast', { event: 'heart' }, ({ payload }) => {
       if (payload?.to === S.user.id) { vibrate([60, 40, 60]); toast(nameOf(payload.from) + ' שלח/ה לך לב ❤'); }
     })
@@ -577,7 +580,7 @@ async function onForegroundPush(p) {
   if (p.kind === 'remind') { maybePromptConfirm(); return; }
   if (p.kind === 'trip' && S.trip && S.trip.shopper_id !== S.user.id) { showTripBanner(S.trip); return; }
   if (p.kind === 'thanks' || p.kind === 'test') { if (p.kind === 'test') toast(p.title + ' · ' + p.body); return; }
-  if (p.kind === 'land' || p.kind === 'delivery' || p.kind === 'ask') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
+  if (p.kind === 'land' || p.kind === 'delivery' || p.kind === 'ask' || p.kind === 'pkg') { await loadFamily(); vibrate(80); if (S.tab !== 'family') showInfoBanner({ title: p.title, body: p.body, act: 'go-family' }); return; }
   if (p.title) { vibrate(80); showInfoBanner({ title: p.title, body: p.body, act: p.kind === 'message' ? 'chat' : '' }); }
 }
 
@@ -1258,11 +1261,12 @@ const STEPS = [['open', 'פתוחה'], ['ordered', 'הוזמן'], ['onway', 'ב�
 async function loadFamily(hid = S.household?.id) {
   if (!hid) return;
   const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const [pl, ld, dv, ak] = await Promise.all([
+  const [pl, ld, dv, ak, pk] = await Promise.all([
     sb.from('places').select('*').eq('household_id', hid),
     sb.from('landings').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
     sb.from('deliveries').select('*').eq('household_id', hid).gte('created_at', since).order('created_at', { ascending: false }).limit(15),
-    sb.from('asks').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(60)
+    sb.from('asks').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(60),
+    sb.from('packages').select('*').eq('household_id', hid).gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString()).order('created_at', { ascending: false }).limit(40)
   ]);
   if (pl.error || ld.error || dv.error) return;
   const lids = ld.data.map(x => x.id), dids = dv.data.map(x => x.id);
@@ -1270,7 +1274,7 @@ async function loadFamily(hid = S.household?.id) {
     lids.length ? sb.from('landing_requests').select('*').in('landing_id', lids).order('created_at') : { data: [] },
     dids.length ? sb.from('delivery_lines').select('*').in('delivery_id', dids).order('created_at') : { data: [] }
   ]);
-  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], asks: ak.error ? [] : ak.data, loaded: true };
+  S.fam = { places: pl.data, landings: ld.data, reqs: rq.data || [], dels: dv.data, lines: ln.data || [], asks: ak.error ? [] : ak.data, pkgs: pk.error ? [] : pk.data, loaded: true };
   if (S.tab === 'family' && !famTyping()) render();
   if (S.sheetKind === 'landing') refreshLandingStars();
 }
@@ -1375,6 +1379,7 @@ function myLandingCard(L) {
   return `<section class="fam-card land live">
     <div class="fam-h"><div><h2>נחתת ${esc(atPlace(L.place))}</h2><p>${L.address ? esc(L.address) + ' · ' : ''}${esc(othersName())} יודע/ת · עד ${hhmm(L.ends_at)}</p></div>
       <img class="fam-ill" src="icons/land.svg" alt=""></div>
+    ${landingPkgBox(L)}
     ${landingAsksBox(L)}
     <div class="reqs">${reqs.length ? reqs.map(r => `<div class="req ${r.done ? 'done' : ''}">
         <span class="av sm" style="background:${colorOf(r.user_id)}">${esc(initial(r.user_id))}</span>
@@ -1452,13 +1457,15 @@ function renderFamily() {
   return top + `<div class="fam">
     ${D ? deliveryCard(D) : ''}
     ${L ? (L.user_id === S.user.id ? myLandingCard(L) : theirLandingCard(L)) : ''}
+    ${S.fam.pkgs.some(pkgLive) ? pkgSection() : ''}
     ${asksSection()}
+    ${S.fam.pkgs.some(pkgLive) ? '' : pkgSection()}
     ${L && L.user_id === S.user.id ? '' : landingCard()}
     ${D ? '' : deliveryPromo()}
     ${familyFeed()}
   </div>`;
 }
-const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || S.fam.asks.some(a => a.status === 'open' && askForMe(a)) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
+const famAttention = () => { const L = activeLanding(), D = activeDelivery(); return (L && L.user_id !== S.user?.id) || S.fam.asks.some(a => a.status === 'open' && askForMe(a)) || S.fam.pkgs.some(p => p.status === 'open' && p.user_id !== S.user?.id) || (D && D.status === 'open' && D.opener_id !== S.user?.id && !S.fam.lines.some(l => l.delivery_id === D.id && l.user_id === S.user?.id)); };
 
 function landingSheetHtml() {
   const favs = favPlaces(), favNames = new Set(favs.map(p => p.name));
@@ -1501,6 +1508,173 @@ function openDeliveryForm() {
 }
 
 /* ---------------- family room: "מי יכול להביא לי?" ---------------- */
+/* ---------------- "החבילה עוברת": a package waiting for pickup, someone in the house takes it ---------------- */
+const PKG_KINDS = [['post', 'סניף דואר'], ['locker', 'לוקר'], ['store', 'חנות / נקודה']];
+const PKG_KIND_LABEL = Object.fromEntries(PKG_KINDS);
+const pkgLive = p => ['open', 'taken', 'arrived'].includes(p.status);
+const pkgOwner = p => p.owner_name || nameOf(p.user_id);
+const pkgThanked = new Set(LS.get('ha_pkg_thanked', []));
+function pkgDueLabel(p) {
+  if (!p.due) return '';
+  const today = new Date(new Date().toDateString()), d = new Date(p.due + 'T00:00:00');
+  const days = Math.round((d - today) / 864e5);
+  if (days < 0) return 'עבר התאריך';
+  if (days === 0) return 'עד היום';
+  if (days === 1) return 'עד מחר';
+  return 'עד ' + d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
+}
+// fill the form from a pasted SMS (Israel Post, lockers, pickup points)
+function parsePkgSms(t) {
+  const out = {}; t = String(t || '');
+  const trk = t.match(/\b([A-Z]{2}\d{9}[A-Z]{2})\b/i) || t.match(/(?:מעקב|משלוח|דבר דואר|חבילה|tracking)[^\d]{0,15}(\d{8,22})/i);
+  if (trk) out.tracking = trk[1].toUpperCase();
+  const code = t.match(/(?:קוד(?:\s*(?:ה?איסוף|לאיסוף|ה?פתיחה|ה?מסירה|אימות))?|code|pin)\D{0,12}(\d{3,8})/i);
+  if (code && code[1] !== out.tracking) out.code = code[1];
+  const due = t.match(/(?:עד|לא יאוחר מ|until|by)\D{0,12}(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/i) || t.match(/\b(\d{1,2})[./](\d{1,2})[./](\d{2,4})\b/);
+  if (due) {
+    const now = new Date(), dd = +due[1], mm = +due[2];
+    let yy = due[3] ? +due[3] : now.getFullYear(); if (yy < 100) yy += 2000;
+    let d = new Date(yy, mm - 1, dd);
+    if (!due[3] && d < new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)) d = new Date(yy + 1, mm - 1, dd);
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) out.due = d.toLocaleDateString('sv-SE');
+  }
+  if (/לוקר|locker|תא\s*מספר/i.test(t)) out.kind = 'locker';
+  else if (/דואר|סניף/.test(t)) out.kind = 'post';
+  else if (/נקודת|נקודה|חנות|pickup/i.test(t)) out.kind = 'store';
+  const pl = t.match(/(סניף\s+[^.,\n:;]{2,40})/) || t.match(/(?:בלוקר|לוקר)\s+(?:ב)?([^.,\n:;]{2,40})/) || t.match(/בנקודת(?:\s*ה?איסוף)?\s+([^.,\n:;]{2,40})/);
+  if (pl) out.place = ((/דואר ישראל/.test(t) && /^סניף/.test(pl[1])) ? 'דואר ישראל · ' : (out.kind === 'locker' ? 'לוקר · ' : '')) + pl[1].trim().replace(/\s+(?:קוד|עד|ניתן|לאיסוף).*$/, '');
+  return out;
+}
+function pkgSheetHtml() {
+  const names = [...new Set(Object.values(S.members).map(m => m.display_name))];
+  const myName = me()?.display_name || '';
+  return `${sheetHead('חבילה חדשה')}
+    <form data-form="pkg" class="pkg-form">
+      <div class="field"><label for="pkg-sms">מדביקים את ה־SMS, והפרטים מתמלאים לבד</label>
+        <textarea id="pkg-sms" rows="3" maxlength="600" placeholder="הדביקו כאן את ההודעה מהדואר או מהלוקר (לא חובה)"></textarea>
+        <span class="pkg-found" id="pkg-found" hidden></span></div>
+      <fieldset class="seg"><legend>איפה מחכה</legend>${PKG_KINDS.map(([k, t]) => `<label><input type="radio" name="kind" value="${k}" ${k === 'post' ? 'checked' : ''}><span>${t}</span></label>`).join('')}</fieldset>
+      <div class="pkg-grid">
+        <div class="field wide"><label for="pkg-place">מקום</label><input id="pkg-place" name="place" maxlength="80" required autocomplete="off" placeholder="למשל: דואר ישראל · סניף הרצל"></div>
+        <div class="field"><label for="pkg-trk">מספר מעקב</label><input id="pkg-trk" name="tracking" maxlength="40" dir="ltr" autocomplete="off"></div>
+        <div class="field"><label for="pkg-code">קוד איסוף</label><input id="pkg-code" name="code" maxlength="20" dir="ltr" inputmode="numeric" autocomplete="off"></div>
+        <div class="field"><label for="pkg-due">לאסוף עד</label><input id="pkg-due" name="due" type="date"></div>
+        <div class="field"><label for="pkg-owner">על שם</label><input id="pkg-owner" name="owner" maxlength="30" list="pkg-names" value="${esc(myName)}" autocomplete="off"><datalist id="pkg-names">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+      </div>
+      <div class="pkg-id" id="pkg-id">מי שאוסף יקבל תזכורת: בסניף דואר צריך ת״ז של בעל החבילה או ייפוי כוח. מספר ת״ז לא נשמר באפליקציה.</div>
+      <button class="btn violet" type="submit">שליחה לבית</button>
+    </form>`;
+}
+function openPkgForm() { openSheet(pkgSheetHtml(), 'tall scroll', 'pkg'); setTimeout(() => document.getElementById('pkg-sms')?.focus(), 250); }
+function applyPkgSms(text) {
+  const f = parsePkgSms(text), set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  set('pkg-trk', f.tracking); set('pkg-code', f.code); set('pkg-due', f.due); set('pkg-place', f.place);
+  if (f.kind) { const r = document.querySelector(`form[data-form="pkg"] input[name="kind"][value="${f.kind}"]`); if (r) { r.checked = true; pkgKindChanged(); } }
+  const n = ['tracking', 'code', 'due', 'place', 'kind'].filter(k => f[k]).length;
+  const el = document.getElementById('pkg-found');
+  if (el) { el.hidden = !text.trim(); el.textContent = n ? `✓ זוהו ${n} פרטים, אפשר לתקן` : 'לא זיהיתי פרטים, אפשר למלא ידנית'; el.classList.toggle('none', !n); }
+}
+function pkgKindChanged() {
+  const k = document.querySelector('form[data-form="pkg"] input[name="kind"]:checked')?.value;
+  const el = document.getElementById('pkg-id'); if (el) el.hidden = k !== 'post';
+}
+async function newPkg(fd) {
+  const place = String(fd.place || '').trim().slice(0, 80); if (!place) return;
+  const row = { household_id: S.household.id, user_id: S.user.id, status: 'open', updated_by: S.user.id,
+    kind: PKG_KINDS.some(([k]) => k === fd.kind) ? fd.kind : 'post', place,
+    tracking: String(fd.tracking || '').trim().slice(0, 40) || null, code: String(fd.code || '').trim().slice(0, 20) || null,
+    due: /^\d{4}-\d{2}-\d{2}$/.test(fd.due || '') ? fd.due : null, owner_name: String(fd.owner || '').trim().slice(0, 30) };
+  const { data, error } = await sb.from('packages').insert(row).select().single();
+  if (error) return famErr(error);
+  S.fam.pkgs.unshift(data); closeSheet(); S.tab = 'family'; render(); vibrate(30);
+  toast('החבילה נשלחה ל' + othersName() + ' 📦');
+}
+async function pkgPatch(id, patch, msg) {
+  const p = S.fam.pkgs.find(x => x.id === id); if (!p) return;
+  patch = { ...patch, updated_by: S.user.id, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('packages').update(patch).eq('id', id);
+  if (error) return famErr(error);
+  Object.assign(p, patch);
+  if (S.sheetKind === 'pkg-go') { if (pkgLive(p) && p.taker_id === S.user.id) setSheet(pkgGoHtml(p)); else closeSheet(); }
+  render(); if (msg) toast(msg); vibrate(30);
+}
+async function pkgThanks(id) {
+  const p = S.fam.pkgs.find(x => x.id === id); if (!p || !p.taker_id) return;
+  pkgThanked.add(id); LS.set('ha_pkg_thanked', [...pkgThanked].slice(-60)); render();
+  await sendMessage({ body: `❤ תודה שאספת לי את החבילה!` });
+  toast('התודה נשלחה ל' + nameOf(p.taker_id) + ' ❤');
+}
+const mapsUrl = q => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+function pkgGoHtml(p) {
+  const step = p.status === 'arrived' ? 2 : 1;
+  const st = (n, t) => `<li class="${n < step + 1 ? 'ok' : n === step + 1 ? 'now' : ''}"><span>${n <= step ? '✓' : n}</span>${t}</li>`;
+  return `${sheetHead('בדרך לחבילה')}
+    <div class="pkg-go">
+      <div class="pkg-go-h"><small>החבילה של ${esc(pkgOwner(p))} · ${PKG_KIND_LABEL[p.kind]}</small><b>${esc(p.place)}</b>${p.due ? `<small>${pkgDueLabel(p)}</small>` : ''}</div>
+      <ol class="pkg-steps">${st(1, 'אני על זה')}${st(2, 'הגעתי למקום')}${st(3, 'החבילה אצלי')}</ol>
+      ${p.code ? `<div class="pkg-code"><small>קוד איסוף</small><b dir="ltr">${esc(p.code)}</b></div>` : ''}
+      ${p.tracking ? `<div class="pkg-trk"><small>מספר מעקב</small><b dir="ltr">${esc(p.tracking)}</b><button class="pkg-copy" data-act="pkg-copy" data-v="${esc(p.tracking)}" aria-label="העתקת מספר המעקב"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button></div>` : ''}
+      ${p.kind === 'post' ? `<div class="pkg-id">לקחת ת״ז של ${esc(pkgOwner(p))} או ייפוי כוח חתום</div>` : ''}
+      <a class="btn soft pkg-nav" href="${mapsUrl(p.place)}" target="_blank" rel="noopener">📍 ניווט</a>
+      ${p.status === 'taken' ? `<button class="btn orange" data-act="pkg-arrived" data-id="${p.id}">הגעתי למקום</button>` : ''}
+      <button class="btn green-b" data-act="pkg-done" data-id="${p.id}">📦 החבילה אצלי</button>
+      <button class="link" data-act="pkg-drop" data-id="${p.id}">לא מסתדר לי, לשחרר לאחרים</button>
+    </div>`;
+}
+function openPkgGo(id) { const p = S.fam.pkgs.find(x => x.id === id); if (p) openSheet(pkgGoHtml(p), 'tall scroll', 'pkg-go'); }
+function pkgCard(p) {
+  const mine = p.user_id === S.user.id, iTook = p.taker_id === S.user.id;
+  const due = pkgDueLabel(p), hot = due === 'עד היום' || due === 'עד מחר' || due === 'עבר התאריך';
+  let state = '', acts = '';
+  if (p.status === 'open') {
+    state = mine ? '<span class="ask-st wait">מחכה למתנדב</span>' : '';
+    acts = `<button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button>
+      ${mine ? `<div class="row2"><button class="ask-btn ghost" data-act="pkg-self" data-id="${p.id}">אספתי בעצמי</button><button class="ask-btn ghost" data-act="pkg-cancel" data-id="${p.id}">ביטול</button></div>` : ''}`;
+  } else if (p.status === 'taken' || p.status === 'arrived') {
+    const where = p.status === 'arrived' ? 'במקום' : 'בדרך';
+    if (iTook) { state = `<span class="ask-st me">את/ה ${where}</span>`; acts = `<button class="ask-btn violet" data-act="pkg-go" data-id="${p.id}">פתיחת פרטי האיסוף</button>`; }
+    else state = `<span class="ask-st">${esc(nameOf(p.taker_id))} ${where}</span>`;
+  } else if (p.status === 'done') {
+    state = `<span class="ask-st ok">✓ ${p.taker_id ? (iTook ? 'אצלך' : 'אצל ' + esc(nameOf(p.taker_id))) : 'נאספה'}</span>`;
+    if (mine && p.taker_id && !iTook && !pkgThanked.has(p.id)) acts = `<button class="ask-btn pink" data-act="pkg-thanks" data-id="${p.id}">❤ תודה ל${esc(nameOf(p.taker_id))}</button>`;
+  }
+  return `<div class="pkg ${iTook && pkgLive(p) ? 'took' : ''} ${p.status === 'done' ? 'done' : ''}">
+    <div class="ask-top"><span class="pkg-ico" aria-hidden="true">📦</span>
+      <div class="ask-t"><b>החבילה של ${esc(pkgOwner(p))}</b><small>${esc(p.place)} · ${PKG_KIND_LABEL[p.kind]}</small></div>${state}</div>
+    ${p.status !== 'done' ? `<div class="ask-chips">${due ? `<span class="${hot ? 'hot' : ''}">⏰ ${due}</span>` : ''}${p.code ? '<span>יש קוד איסוף</span>' : ''}${p.kind === 'post' ? '<span>ת״ז או ייפוי כוח</span>' : ''}</div>` : ''}
+    ${acts}</div>`;
+}
+function pkgSection() {
+  const recent = S.fam.pkgs.filter(p => p.status === 'done' && Date.now() - new Date(p.updated_at).getTime() < 24 * 3600e3);
+  const list = [...S.fam.pkgs.filter(pkgLive), ...recent];
+  return `<section class="fam-card pkg-card">
+    <div class="fam-h"><div><h2>החבילה עוברת</h2><p>חבילה מחכה לאיסוף? מי שעובר ליד לוקח</p></div><img class="fam-ill" src="icons/pkg.svg" alt=""></div>
+    ${list.length ? `<div class="asks">${list.map(pkgCard).join('')}</div>` : '<div class="req-empty ask-empty">אין חבילות שמחכות. קיבלתם הודעה על חבילה? שולחים לבית, ומי שעובר ליד אוסף.</div>'}
+    <button class="btn ink fam-btn" data-act="pkg-new">+ קיבלתי הודעה על חבילה</button>
+  </section>`;
+}
+// someone landed at the place where a family package is waiting
+const pkgNorm = s => String(s || '').replace(/דואר ישראל|לוקר|סניף|·|[-–־"'׳״]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+function landingPkgBox(L) {
+  const lp = pkgNorm(L.place);
+  const fit = S.fam.pkgs.filter(p => p.status === 'open' && lp && (pkgNorm(p.place).includes(lp) || lp.includes(pkgNorm(p.place))));
+  if (!fit.length) return '';
+  return `<div class="ask-match pkg-match"><b>📦 יש כאן חבילה של הבית</b>
+    ${fit.map(p => `<div class="am-row"><span class="am-t"><b>החבילה של ${esc(pkgOwner(p))}</b><small>${pkgDueLabel(p) || PKG_KIND_LABEL[p.kind]}</small></span>
+      <button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">אני לוקח/ת</button></div>`).join('')}</div>`;
+}
+
+/* ---- one-time "what's new" after an update ---- */
+const WHATS_NEW = { 'v1.10.0': { title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 לחצו לראות · תהנו!' } };
+let whatsNewTries = 0;
+function maybeWhatsNew() {
+  if (LS.get('ha_seen_ver', '') === APP_VERSION) return;
+  if (!S.household || S.locked || S.cover || S.booting || document.hidden) { if (whatsNewTries++ < 60) setTimeout(maybeWhatsNew, 2000); return; }
+  LS.set('ha_seen_ver', APP_VERSION);
+  const w = WHATS_NEW[APP_VERSION];
+  if (w && S.wasUser) showInfoBanner({ title: w.title, body: w.body, act: 'whats-new', persistent: true });
+}
+
 const ASK_PLACES = [['pharm', '💊 בית מרקחת'], ['home', '🔧 כלי בית'], ['post', '📮 דואר'], ['fuel', '⛽ תחנת דלק'], ['store', '🏪 מכולת'], ['any', 'איפה שיש']];
 const ASK_DUE = [['today', 'היום'], ['tomorrow', 'מחר'], ['week', 'השבוע'], ['none', 'לא דחוף']];
 const ASK_PLACE_LABEL = Object.fromEntries(ASK_PLACES);
@@ -2062,6 +2236,18 @@ document.addEventListener('click', async e => {
     case 'lreq-done': requestDone(b.dataset.id); break;
     case 'del-open': openDeliveryForm(); break;
     case 'ask-new': openAskForm(); break;
+    case 'pkg-new': openPkgForm(); break;
+    case 'pkg-take': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p && p.status !== 'open') { toast(nameOf(p.taker_id) + ' כבר על זה'); break; }
+      pkgPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id }, 'מעולה! כולם יודעים שאת/ה על זה').then(() => openPkgGo(b.dataset.id)); break; }
+    case 'pkg-go': openPkgGo(b.dataset.id); break;
+    case 'pkg-arrived': pkgPatch(b.dataset.id, { status: 'arrived' }); break;
+    case 'pkg-done': pkgPatch(b.dataset.id, { status: 'done' }, 'תודה! כולם קיבלו הודעה 📦'); break;
+    case 'pkg-drop': pkgPatch(b.dataset.id, { status: 'open', taker_id: null, remind_taker: false }, 'החבילה חזרה לחכות למתנדב'); break;
+    case 'pkg-self': pkgPatch(b.dataset.id, { status: 'done', taker_id: null }, 'סומן שאספת ✓'); break;
+    case 'pkg-cancel': pkgPatch(b.dataset.id, { status: 'cancelled' }, 'בוטל'); break;
+    case 'pkg-thanks': pkgThanks(b.dataset.id); break;
+    case 'pkg-copy': { const v = b.dataset.v; navigator.clipboard?.writeText(v).then(() => toast('הועתק ✓'), () => toast(v)); break; }
+    case 'whats-new': document.getElementById('banner')?.remove(); closeSheet(); S.tab = 'family'; render(); window.scrollTo(0, 0); loadFamily(); break;
     case 'ask-take': askPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id }, 'מעולה! ' + (nameOf(S.fam.asks.find(a => a.id === b.dataset.id)?.user_id)) + ' קיבל/ה הודעה'); break;
     case 'ask-drop': askPatch(b.dataset.id, { status: 'open', taker_id: null }, 'הבקשה חזרה להיות פתוחה'); break;
     case 'ask-done': askPatch(b.dataset.id, { status: 'done' }, 'תודה! הבקשה נסגרה ✓'); break;
@@ -2083,7 +2269,7 @@ document.addEventListener('click', async e => {
   }
 });
 
-document.addEventListener('input', e => { if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); if (e.target.id === 'ask-body') updateAskHint(e.target.value); });
+document.addEventListener('input', e => { if (e.target.id === 'pkg-sms') applyPkgSms(e.target.value); if (e.target.name === 'kind' && e.target.closest('form[data-form="pkg"]')) pkgKindChanged(); if (e.target.id === 'add-input') S.addText = e.target.value; if (e.target.id === 'land-q') filterPlaces(e.target.value); if (e.target.id === 'ask-body') updateAskHint(e.target.value); });
 
 document.addEventListener('submit', async e => {
   const f = e.target.closest('form[data-form]'); if (!f) return;
@@ -2095,6 +2281,7 @@ document.addEventListener('submit', async e => {
     case 'lreq': { const t = String(fd.text || '').trim(); if (t) { f.reset(); requestOnLanding(t); } break; }
     case 'del-new': openDeliveryNow(fd); break;
     case 'ask': newAsk(fd); break;
+    case 'pkg': newPkg(fd); break;
     case 'forgot': {
       const email = String(fd.email || '').trim(); if (!email) break;
       S.busy = true; S.forgotEmail = email; render();
