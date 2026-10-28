@@ -539,3 +539,7 @@ nav.tabs button{min-width:64px}
 .pkg-copy{border:0;background:#fff;border-radius:10px;min-width:44px;min-height:44px;color:var(--accent-d);display:flex;align-items:center;justify-content:center}
 .pkg-nav{text-decoration:none;display:flex;align-items:center;justify-content:center}
 .btn.green-b{background:var(--green)}
+/* v1.10.1: package details */
+.pkg-name{border:0;background:none;padding:0;font:inherit;font-weight:700;font-size:17px;color:inherit;text-align:right;text-decoration:underline;text-decoration-color:#C9C4EE;text-underline-offset:4px;cursor:pointer}
+.pkg .row2 .ask-btn{flex:1}
+.pkg-facts{margin:0}

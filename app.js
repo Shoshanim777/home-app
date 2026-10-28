@@ -61,7 +61,7 @@ for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { em
 const CUSTOM_TAB = 'שלנו';
 
 /* ---------------- state ---------------- */
-const APP_VERSION = 'v1.10.0';
+const APP_VERSION = 'v1.10.1';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -1596,6 +1596,7 @@ async function pkgPatch(id, patch, msg) {
   if (error) return famErr(error);
   Object.assign(p, patch);
   if (S.sheetKind === 'pkg-go') { if (pkgLive(p) && p.taker_id === S.user.id) setSheet(pkgGoHtml(p)); else closeSheet(); }
+  else if (S.sheetKind === 'pkg-info') closeSheet();
   render(); if (msg) toast(msg); vibrate(30);
 }
 async function pkgThanks(id) {
@@ -1621,6 +1622,35 @@ function pkgGoHtml(p) {
       <button class="link" data-act="pkg-drop" data-id="${p.id}">לא מסתדר לי, לשחרר לאחרים</button>
     </div>`;
 }
+// everyone in the house can see the full details before (or without) taking it
+function pkgInfoHtml(p) {
+  const row = (k, v) => v ? `<div><span>${k}</span><b>${v}</b></div>` : '';
+  const status = p.status === 'open' ? 'מחכה שמישהו ייקח' : p.status === 'taken' ? esc(nameOf(p.taker_id)) + ' בדרך' : p.status === 'arrived' ? esc(nameOf(p.taker_id)) + ' במקום' : p.status === 'done' ? 'נאספה ✓' : 'בוטלה';
+  return `<div class="adm-facts pkg-facts">
+      ${row('איפה', esc(PKG_KIND_LABEL[p.kind]))}${row('על שם', esc(pkgOwner(p)))}
+      ${row('תאריך אחרון', p.due ? pkgDueLabel(p) : '')}${row('מצב', status)}
+      ${row('הועלתה ע״י', esc(nameOf(p.user_id)) + ' · ' + relDay(p.created_at))}
+    </div>
+    ${p.code ? `<div class="pkg-code"><small>קוד איסוף</small><b dir="ltr">${esc(p.code)}</b></div>` : ''}
+    ${p.tracking ? `<div class="pkg-trk"><small>מספר מעקב</small><b dir="ltr">${esc(p.tracking)}</b><button class="pkg-copy" data-act="pkg-copy" data-v="${esc(p.tracking)}" aria-label="העתקת מספר המעקב"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button></div>` : ''}
+    ${!p.code && !p.tracking ? '<div class="req-empty">לא הוזנו קוד איסוף או מספר מעקב</div>' : ''}
+    ${p.kind === 'post' && pkgLive(p) ? `<div class="pkg-id">בסניף דואר צריך ת״ז של ${esc(pkgOwner(p))} או ייפוי כוח חתום</div>` : ''}
+    ${pkgLive(p) ? `<a class="btn soft pkg-nav" href="${mapsUrl(p.place)}" target="_blank" rel="noopener">📍 ניווט ל${esc(p.place)}</a>` : ''}`;
+}
+function pkgDetailsHtml(p) {
+  const mine = p.user_id === S.user.id;
+  let acts = '';
+  if (p.status === 'open') acts = `<button class="btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button>
+    ${mine ? `<div class="row2"><button class="btn ghost" data-act="pkg-self" data-id="${p.id}">אספתי בעצמי</button><button class="btn ghost" data-act="pkg-cancel" data-id="${p.id}">ביטול</button></div>` : ''}`;
+  return `${sheetHead('החבילה של ' + esc(pkgOwner(p)))}
+    <div class="pkg-go"><div class="pkg-go-h"><small>${esc(PKG_KIND_LABEL[p.kind])}</small><b>${esc(p.place)}</b></div>
+      ${pkgInfoHtml(p)}${acts}</div>`;
+}
+function openPkgInfo(id) {
+  const p = S.fam.pkgs.find(x => x.id === id); if (!p) return;
+  if (p.taker_id === S.user.id && pkgLive(p)) return openPkgGo(id);
+  openSheet(pkgDetailsHtml(p), 'tall scroll', 'pkg-info');
+}
 function openPkgGo(id) { const p = S.fam.pkgs.find(x => x.id === id); if (p) openSheet(pkgGoHtml(p), 'tall scroll', 'pkg-go'); }
 function pkgCard(p) {
   const mine = p.user_id === S.user.id, iTook = p.taker_id === S.user.id;
@@ -1628,19 +1658,19 @@ function pkgCard(p) {
   let state = '', acts = '';
   if (p.status === 'open') {
     state = mine ? '<span class="ask-st wait">מחכה למתנדב</span>' : '';
-    acts = `<button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button>
+    acts = `<div class="row2"><button class="ask-btn ghost" data-act="pkg-info" data-id="${p.id}">פרטי החבילה</button><button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button></div>
       ${mine ? `<div class="row2"><button class="ask-btn ghost" data-act="pkg-self" data-id="${p.id}">אספתי בעצמי</button><button class="ask-btn ghost" data-act="pkg-cancel" data-id="${p.id}">ביטול</button></div>` : ''}`;
   } else if (p.status === 'taken' || p.status === 'arrived') {
     const where = p.status === 'arrived' ? 'במקום' : 'בדרך';
     if (iTook) { state = `<span class="ask-st me">את/ה ${where}</span>`; acts = `<button class="ask-btn violet" data-act="pkg-go" data-id="${p.id}">פתיחת פרטי האיסוף</button>`; }
-    else state = `<span class="ask-st">${esc(nameOf(p.taker_id))} ${where}</span>`;
+    else { state = `<span class="ask-st">${esc(nameOf(p.taker_id))} ${where}</span>`; acts = `<button class="ask-btn ghost" data-act="pkg-info" data-id="${p.id}">פרטי החבילה</button>`; }
   } else if (p.status === 'done') {
     state = `<span class="ask-st ok">✓ ${p.taker_id ? (iTook ? 'אצלך' : 'אצל ' + esc(nameOf(p.taker_id))) : 'נאספה'}</span>`;
     if (mine && p.taker_id && !iTook && !pkgThanked.has(p.id)) acts = `<button class="ask-btn pink" data-act="pkg-thanks" data-id="${p.id}">❤ תודה ל${esc(nameOf(p.taker_id))}</button>`;
   }
   return `<div class="pkg ${iTook && pkgLive(p) ? 'took' : ''} ${p.status === 'done' ? 'done' : ''}">
     <div class="ask-top"><span class="pkg-ico" aria-hidden="true">📦</span>
-      <div class="ask-t"><b>החבילה של ${esc(pkgOwner(p))}</b><small>${esc(p.place)} · ${PKG_KIND_LABEL[p.kind]}</small></div>${state}</div>
+      <div class="ask-t"><b><button class="pkg-name" data-act="pkg-info" data-id="${p.id}">החבילה של ${esc(pkgOwner(p))}</button></b><small>${esc(p.place)} · ${PKG_KIND_LABEL[p.kind]}</small></div>${state}</div>
     ${p.status !== 'done' ? `<div class="ask-chips">${due ? `<span class="${hot ? 'hot' : ''}">⏰ ${due}</span>` : ''}${p.code ? '<span>יש קוד איסוף</span>' : ''}${p.kind === 'post' ? '<span>ת״ז או ייפוי כוח</span>' : ''}</div>` : ''}
     ${acts}</div>`;
 }
@@ -1665,14 +1695,15 @@ function landingPkgBox(L) {
 }
 
 /* ---- one-time "what's new" after an update ---- */
-const WHATS_NEW = { 'v1.10.0': { title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 לחצו לראות · תהנו!' } };
+const WHATS_NEW = { id: 'pkg-2026-10', title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 לחצו לראות · תהנו!' };
 let whatsNewTries = 0;
 function maybeWhatsNew() {
-  if (LS.get('ha_seen_ver', '') === APP_VERSION) return;
+  // per announcement (not per version), so a quick fix release doesn't hide it or show it twice
+  const seen = LS.get('ha_seen_news', []);
+  if (seen.includes(WHATS_NEW.id) || LS.get('ha_seen_ver', '') === 'v1.10.0') return;
   if (!S.household || S.locked || S.cover || S.booting || document.hidden) { if (whatsNewTries++ < 60) setTimeout(maybeWhatsNew, 2000); return; }
-  LS.set('ha_seen_ver', APP_VERSION);
-  const w = WHATS_NEW[APP_VERSION];
-  if (w && S.wasUser) showInfoBanner({ title: w.title, body: w.body, act: 'whats-new', persistent: true });
+  LS.set('ha_seen_news', [...seen, WHATS_NEW.id].slice(-20));
+  if (S.wasUser) showInfoBanner({ title: WHATS_NEW.title, body: WHATS_NEW.body, act: 'whats-new', persistent: true });
 }
 
 const ASK_PLACES = [['pharm', '💊 בית מרקחת'], ['home', '🔧 כלי בית'], ['post', '📮 דואר'], ['fuel', '⛽ תחנת דלק'], ['store', '🏪 מכולת'], ['any', 'איפה שיש']];
@@ -2240,6 +2271,7 @@ document.addEventListener('click', async e => {
     case 'pkg-take': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p && p.status !== 'open') { toast(nameOf(p.taker_id) + ' כבר על זה'); break; }
       pkgPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id }, 'מעולה! כולם יודעים שאת/ה על זה').then(() => openPkgGo(b.dataset.id)); break; }
     case 'pkg-go': openPkgGo(b.dataset.id); break;
+    case 'pkg-info': openPkgInfo(b.dataset.id); break;
     case 'pkg-arrived': pkgPatch(b.dataset.id, { status: 'arrived' }); break;
     case 'pkg-done': pkgPatch(b.dataset.id, { status: 'done' }, 'תודה! כולם קיבלו הודעה 📦'); break;
     case 'pkg-drop': pkgPatch(b.dataset.id, { status: 'open', taker_id: null, remind_taker: false }, 'החבילה חזרה לחכות למתנדב'); break;
