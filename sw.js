@@ -1,5 +1,5 @@
 // בדרך לסופר — service worker: offline shell + push notifications + app-icon badge
-const VERSION = 'v1.10.1';
+const VERSION = 'v1.11.0';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', e => {
@@ -43,7 +43,7 @@ self.addEventListener('push', e => {
     await self.registration.showNotification(d.title || 'בדרך לסופר', {
       body: d.body || '', icon: d.icon || 'icon-192.png', badge: d.badge || 'badge-96.png', dir: 'rtl', lang: 'he',
       tag: d.tag, renotify: !!d.tag, requireInteraction: !!d.requireInteraction,
-      vibrate: [100, 60, 100], data: { url: d.url || './' }
+      silent: !!d.silent, vibrate: d.silent ? [] : [100, 60, 100], data: { url: d.url || './' }
     });
     await updateBadge();
   })());

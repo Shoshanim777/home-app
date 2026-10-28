@@ -38,7 +38,7 @@ async function userFromRequest(req: Request) {
   return await r.json();
 }
 
-type Payload = { title: string; body: string; tag?: string; url?: string; requireInteraction?: boolean; kind?: string; icon?: string; badge?: string };
+type Payload = { title: string; body: string; tag?: string; url?: string; requireInteraction?: boolean; kind?: string; icon?: string; badge?: string; silent?: boolean };
 const ILS = (n: number) => '₪' + (Math.round(n * 100) / 100).toLocaleString('he-IL', { maximumFractionDigits: 2 });
 
 async function pushTo(userIds: string[], payload: Payload) {
@@ -162,6 +162,7 @@ async function askEvent(type: string, id: string, from: string) {
 // ---- "החבילה עוברת": packages waiting for pickup ----
 const PKG = { icon: 'notif-pkg.png', badge: 'badge-pkg.png', kind: 'pkg' };
 const PKG_URL = APP_URL + '?family=pkg';
+const PLAN_WHEN: Record<string, string> = { tonight: 'היום בערב', tomorrow: 'מחר', due: 'עד התאריך האחרון' };
 const pkgOwner = (p: Record<string, unknown>, poster: string) => (p.owner_name as string) || poster;
 const pkgPlace = (p: Record<string, unknown>) => (p.place as string) || 'נקודת האיסוף';
 function pkgDue(d: string | Date | null) {
@@ -180,6 +181,12 @@ async function pkgEvent(type: string, id: string, from: string) {
   if (type === 'pkg_new') {
     return pushTo(await othersInHousehold(p.household_id, p.user_id), { title: `📦 חבילה של ${owner} מחכה לאיסוף`,
       body: [place, pkgDue(p.due), 'מי לוקח?'].filter(Boolean).join(' · '), tag: 'pkg-' + id, url: PKG_URL, ...PKG });
+  }
+  if (type === 'pkg_plan') {
+    if (!p.plan_by || p.plan_by === p.user_id || p.status !== 'open') return { sent: 0 };
+    const planner = await nameIn(p.household_id, p.plan_by);
+    return pushTo([p.user_id], { title: `🐢 ${planner} ייקח/תיקח את החבילה ${PLAN_WHEN[p.plan_when as string] || 'בהמשך'}`,
+      body: `החבילה של ${owner} · ${place}`, tag: 'pkg-' + id, url: PKG_URL, ...PKG, silent: true });
   }
   const by = (p.updated_by as string) || p.user_id;
   const actor = await nameIn(p.household_id, by);
@@ -209,7 +216,8 @@ async function pkgReminders() {
      returning id, household_id, user_id, owner_name, place, due`;
   for (const p of dueSoon) {
     const poster = await nameIn(p.household_id, p.user_id);
-    const members = await sql`select user_id from public.members where household_id = ${p.household_id}`;
+    const [plan] = await sql`select plan_by from public.packages where id = ${p.id}`;
+    const members = plan?.plan_by ? [{ user_id: plan.plan_by }] : await sql`select user_id from public.members where household_id = ${p.household_id}`;
     const last = pkgDue(p.due) === 'עד היום' ? 'היום היום האחרון לאסוף' : 'מחר נגמר הזמן לאסוף';
     await pushTo(members.map((m) => m.user_id as string), { title: `⏰ ${last}`, body: `החבילה של ${pkgOwner(p, poster)} עדיין ב${pkgPlace(p)} · מי לוקח?`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
   }
@@ -223,7 +231,27 @@ async function pkgReminders() {
     const poster = await nameIn(p.household_id, p.user_id);
     await pushTo([p.taker_id as string], { title: '📦 החבילה אצלך?', body: `אם כבר אספת את החבילה של ${pkgOwner(p, poster)}, סמן/י "החבילה אצלי"`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
   }
-  return dueSoon.length + late.length;
+  // "אקח בהמשך": one reminder to the planner at the time they chose
+  const planDue = await sql`
+    update public.packages set remind_plan = true
+     where status = 'open' and plan_by is not null and not remind_plan and plan_remind_at <= now()
+     returning id, household_id, user_id, owner_name, place, plan_by`;
+  for (const p of planDue) {
+    const poster = await nameIn(p.household_id, p.user_id);
+    await pushTo([p.plan_by as string], { title: '🐢 תזכורת: אמרת שתיקח/י את החבילה', body: `החבילה של ${pkgOwner(p, poster)} · ${pkgPlace(p)}`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
+  }
+  // the time passed and nobody took it: back to red, the whole house hears
+  const expired = await sql`
+    with x as (select id, plan_by from public.packages where status = 'open' and plan_by is not null and plan_until <= now() for update)
+    update public.packages p set plan_by = null, plan_when = null, plan_remind_at = null, plan_until = null, remind_plan = false
+      from x where p.id = x.id
+     returning p.id, p.household_id, p.user_id, p.owner_name, p.place, x.plan_by old_planner`;
+  for (const p of expired) {
+    const poster = await nameIn(p.household_id, p.user_id), planner = await nameIn(p.household_id, p.old_planner);
+    const members = await sql`select user_id from public.members where household_id = ${p.household_id}`;
+    await pushTo(members.map((m) => m.user_id as string), { title: `${planner} לא הספיק/ה לאסוף`, body: `החבילה של ${pkgOwner(p, poster)} שוב מחכה · ${pkgPlace(p)} · מי לוקח?`, tag: 'pkg-' + p.id, url: PKG_URL, ...PKG });
+  }
+  return dueSoon.length + late.length + planDue.length + expired.length;
 }
 
 async function familyEvent(type: string, id: string) {

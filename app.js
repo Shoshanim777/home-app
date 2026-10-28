@@ -61,7 +61,7 @@ for (const c of CATALOG) for (const [emo, n] of c.items) CATALOG_MAP.set(n, { em
 const CUSTOM_TAB = 'שלנו';
 
 /* ---------------- state ---------------- */
-const APP_VERSION = 'v1.10.1';
+const APP_VERSION = 'v1.11.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -878,7 +878,7 @@ function renderMain() {
   const nav = `<nav class="tabs">
     <button class="${S.tab === 'list' ? 'active' : ''}" data-act="tab" data-tab="list">${I.list} סופר</button>
     <button class="${S.tab === 'stats' ? 'active' : ''}" data-act="tab" data-tab="stats">${I.stats} סטטיסטיקה</button>
-    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>משפחה${famAttention() ? '<span class="dot" aria-label="יש חדש"></span>' : ''}</span></button>
+    <button class="${S.tab === 'family' ? 'active' : ''}" data-act="tab" data-tab="family">${I.home} <span>משפחה${S.fam.pkgs.some(p => p.status === 'open' && !p.plan_by && p.user_id !== S.user?.id) ? '<span class="dot red" aria-label="יש חבילה שמחכה"></span>' : famAttention() ? '<span class="dot" aria-label="יש חדש"></span>' : ''}</span></button>
     <button data-act="settings">${I.gear} הגדרות</button>
   </nav>`;
   return `<div class="screen ${S.trip && S.tab === 'list' ? 'trip' : ''}">${body}</div>${nav}`;
@@ -1596,7 +1596,7 @@ async function pkgPatch(id, patch, msg) {
   if (error) return famErr(error);
   Object.assign(p, patch);
   if (S.sheetKind === 'pkg-go') { if (pkgLive(p) && p.taker_id === S.user.id) setSheet(pkgGoHtml(p)); else closeSheet(); }
-  else if (S.sheetKind === 'pkg-info') closeSheet();
+  else if (S.sheetKind === 'pkg-info') setSheet(pkgDetailsHtml(p));
   render(); if (msg) toast(msg); vibrate(30);
 }
 async function pkgThanks(id) {
@@ -1625,11 +1625,11 @@ function pkgGoHtml(p) {
 // everyone in the house can see the full details before (or without) taking it
 function pkgInfoHtml(p) {
   const row = (k, v) => v ? `<div><span>${k}</span><b>${v}</b></div>` : '';
-  const status = p.status === 'open' ? 'מחכה שמישהו ייקח' : p.status === 'taken' ? esc(nameOf(p.taker_id)) + ' בדרך' : p.status === 'arrived' ? esc(nameOf(p.taker_id)) + ' במקום' : p.status === 'done' ? 'נאספה ✓' : 'בוטלה';
+  const status = p.status === 'open' && p.plan_by ? '🐢 ' + esc(nameOf(p.plan_by)) + ' · ' + (PLAN_WHEN[p.plan_when] || 'בהמשך') : p.status === 'open' ? 'מחכה שמישהו ייקח' : p.status === 'taken' ? esc(nameOf(p.taker_id)) + ' בדרך' : p.status === 'arrived' ? esc(nameOf(p.taker_id)) + ' במקום' : p.status === 'done' ? 'נאספה ✓' : 'בוטלה';
   return `<div class="adm-facts pkg-facts">
       ${row('איפה', esc(PKG_KIND_LABEL[p.kind]))}${row('על שם', esc(pkgOwner(p)))}
       ${row('תאריך אחרון', p.due ? pkgDueLabel(p) : '')}${row('מצב', status)}
-      ${row('הועלתה ע״י', esc(nameOf(p.user_id)) + ' · ' + relDay(p.created_at))}
+      ${row('הועלתה ע״י', esc(nameOf(p.user_id)) + ' · ' + relDay(p.created_at))}${(p.seen_by || []).some(id => id !== p.user_id && S.members[id]) ? row('ראו', (p.seen_by || []).filter(id => id !== p.user_id && S.members[id]).map(id => esc(nameOf(id))).join(', ')) : ''}
     </div>
     ${p.code ? `<div class="pkg-code"><small>קוד איסוף</small><b dir="ltr">${esc(p.code)}</b></div>` : ''}
     ${p.tracking ? `<div class="pkg-trk"><small>מספר מעקב</small><b dir="ltr">${esc(p.tracking)}</b><button class="pkg-copy" data-act="pkg-copy" data-v="${esc(p.tracking)}" aria-label="העתקת מספר המעקב"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button></div>` : ''}
@@ -1641,37 +1641,78 @@ function pkgDetailsHtml(p) {
   const mine = p.user_id === S.user.id;
   let acts = '';
   if (p.status === 'open') acts = `<button class="btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button>
+    ${!p.plan_by && !mine ? `<button class="btn soft" data-act="pkg-plan" data-id="${p.id}">🐢 ראיתי, אקח בהמשך</button>` : ''}
     ${mine ? `<div class="row2"><button class="btn ghost" data-act="pkg-self" data-id="${p.id}">אספתי בעצמי</button><button class="btn ghost" data-act="pkg-cancel" data-id="${p.id}">ביטול</button></div>` : ''}`;
   return `${sheetHead('החבילה של ' + esc(pkgOwner(p)))}
-    <div class="pkg-go"><div class="pkg-go-h"><small>${esc(PKG_KIND_LABEL[p.kind])}</small><b>${esc(p.place)}</b></div>
+    <div class="pkg-go"><div class="pkg-go-h"><small>${esc(PKG_KIND_LABEL[p.kind])}</small><b>${esc(p.place)}</b><span class="pkg-lt ${pkgLight(p)[0]}"><i class="pkg-lamp ${pkgLight(p)[0]}"></i>${pkgLight(p)[1]}</span></div>
       ${pkgInfoHtml(p)}${acts}</div>`;
 }
 function openPkgInfo(id) {
   const p = S.fam.pkgs.find(x => x.id === id); if (!p) return;
   if (p.taker_id === S.user.id && pkgLive(p)) return openPkgGo(id);
   openSheet(pkgDetailsHtml(p), 'tall scroll', 'pkg-info');
+  if (p.user_id !== S.user.id && !(p.seen_by || []).includes(S.user.id)) { p.seen_by = [...(p.seen_by || []), S.user.id]; sb.rpc('pkg_seen', { p: id }).then(() => {}, () => {}); }
 }
 function openPkgGo(id) { const p = S.fam.pkgs.find(x => x.id === id); if (p) openSheet(pkgGoHtml(p), 'tall scroll', 'pkg-go'); }
+// the light: red = nobody yet, yellow = someone will take it later, orange = on the way, green = collected
+function pkgLight(p) {
+  if (p.status === 'done') return ['green', 'נאספה'];
+  if (p.status === 'taken' || p.status === 'arrived') return ['orange', p.status === 'arrived' ? 'במקום' : 'בדרך'];
+  if (p.status === 'open' && p.plan_by) return ['yellow', 'ייאסף בהמשך'];
+  if (p.status === 'open') return ['red', 'מחכה למישהו'];
+  return ['gray', 'בוטלה'];
+}
+const PLAN_WHEN = { tonight: 'היום בערב', tomorrow: 'מחר', due: 'עד התאריך האחרון' };
+function pkgPlanTimes(when, p) {
+  const day = (off, h, m = 0) => { const d = new Date(); d.setDate(d.getDate() + off); d.setHours(h, m, 0, 0); return d; };
+  let remind, until;
+  if (when === 'tonight') { remind = day(0, 19); until = day(0, 23, 59); }
+  else if (when === 'tomorrow') { remind = day(1, 9); until = day(1, 23, 59); }
+  else { const d = new Date(p.due + 'T09:00:00'); remind = d; until = new Date(p.due + 'T23:59:00'); }
+  if (remind.getTime() < Date.now()) remind = new Date(Date.now() + 30 * 60e3);
+  return { plan_remind_at: remind.toISOString(), plan_until: until.toISOString() };
+}
+function pkgPlanHtml(p) {
+  const opts = [['tonight', 'היום בערב'], ['tomorrow', 'מחר'], ...(p.due && !['עד היום', 'עד מחר', 'עבר התאריך'].includes(pkgDueLabel(p)) ? [['due', 'עד התאריך האחרון (' + pkgDueLabel(p).replace(/^עד /, '') + ')']] : [])];
+  return `${sheetHead('🐢 ראיתי, אקח בהמשך')}
+    <div class="lead">מתי תאסוף/י את החבילה של ${esc(pkgOwner(p))}? ${esc(nameOf(p.user_id))} תקבל/יקבל הודעה, ואת/ה תקבל/י תזכורת בזמן.</div>
+    <div class="pkg-plan-opts">${opts.map(([k, t]) => `<button class="btn soft" data-act="pkg-plan-set" data-id="${p.id}" data-when="${k}">${t}</button>`).join('')}</div>
+    <div class="small muted">זה לא נועל את החבילה: אם מישהו אחר יעבור ליד קודם, הוא יכול לקחת, ואת/ה תקבל/י הודעה.</div>`;
+}
+function pkgSeenHtml(p) {
+  const ids = (p.seen_by || []).filter(id => id !== p.user_id && S.members[id]);
+  if (!ids.length) return '';
+  return `<span class="pkg-seen" title="ראו את החבילה"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+    ${ids.map(id => `<span class="av xs" style="background:${colorOf(id)}" aria-label="${esc(nameOf(id))} ראה/תה">${esc(initial(id))}</span>`).join('')}</span>`;
+}
 function pkgCard(p) {
-  const mine = p.user_id === S.user.id, iTook = p.taker_id === S.user.id;
+  const mine = p.user_id === S.user.id, iTook = p.taker_id === S.user.id, iPlan = p.plan_by === S.user.id;
   const due = pkgDueLabel(p), hot = due === 'עד היום' || due === 'עד מחר' || due === 'עבר התאריך';
+  const [light, lightT] = pkgLight(p);
+  const info = `<button class="ask-btn ghost" data-act="pkg-info" data-id="${p.id}">פרטי החבילה</button>`;
   let state = '', acts = '';
-  if (p.status === 'open') {
+  if (p.status === 'open' && p.plan_by) {
+    state = `<span class="ask-st plan">🐢 ${iPlan ? 'את/ה' : esc(nameOf(p.plan_by))} · ${PLAN_WHEN[p.plan_when] || 'בהמשך'}</span>`;
+    acts = `<button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה${iPlan ? ' עכשיו' : ''}</button>
+      <div class="row2">${info}${iPlan ? `<button class="ask-btn ghost" data-act="pkg-plan-off" data-id="${p.id}">כבר לא מתאים לי</button>` : ''}</div>`;
+  } else if (p.status === 'open') {
     state = mine ? '<span class="ask-st wait">מחכה למתנדב</span>' : '';
-    acts = `<div class="row2"><button class="ask-btn ghost" data-act="pkg-info" data-id="${p.id}">פרטי החבילה</button><button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button></div>
+    acts = `<button class="ask-btn violet" data-act="pkg-take" data-id="${p.id}">יאללה, אני על זה</button>
+      <div class="row2">${info}<button class="ask-btn turtle" data-act="pkg-plan" data-id="${p.id}">🐢 אקח בהמשך</button></div>
       ${mine ? `<div class="row2"><button class="ask-btn ghost" data-act="pkg-self" data-id="${p.id}">אספתי בעצמי</button><button class="ask-btn ghost" data-act="pkg-cancel" data-id="${p.id}">ביטול</button></div>` : ''}`;
   } else if (p.status === 'taken' || p.status === 'arrived') {
     const where = p.status === 'arrived' ? 'במקום' : 'בדרך';
     if (iTook) { state = `<span class="ask-st me">את/ה ${where}</span>`; acts = `<button class="ask-btn violet" data-act="pkg-go" data-id="${p.id}">פתיחת פרטי האיסוף</button>`; }
-    else { state = `<span class="ask-st">${esc(nameOf(p.taker_id))} ${where}</span>`; acts = `<button class="ask-btn ghost" data-act="pkg-info" data-id="${p.id}">פרטי החבילה</button>`; }
+    else { state = `<span class="ask-st">${esc(nameOf(p.taker_id))} ${where}</span>`; acts = info; }
   } else if (p.status === 'done') {
     state = `<span class="ask-st ok">✓ ${p.taker_id ? (iTook ? 'אצלך' : 'אצל ' + esc(nameOf(p.taker_id))) : 'נאספה'}</span>`;
     if (mine && p.taker_id && !iTook && !pkgThanked.has(p.id)) acts = `<button class="ask-btn pink" data-act="pkg-thanks" data-id="${p.id}">❤ תודה ל${esc(nameOf(p.taker_id))}</button>`;
   }
   return `<div class="pkg ${iTook && pkgLive(p) ? 'took' : ''} ${p.status === 'done' ? 'done' : ''}">
-    <div class="ask-top"><span class="pkg-ico" aria-hidden="true">📦</span>
-      <div class="ask-t"><b><button class="pkg-name" data-act="pkg-info" data-id="${p.id}">החבילה של ${esc(pkgOwner(p))}</button></b><small>${esc(p.place)} · ${PKG_KIND_LABEL[p.kind]}</small></div>${state}</div>
-    ${p.status !== 'done' ? `<div class="ask-chips">${due ? `<span class="${hot ? 'hot' : ''}">⏰ ${due}</span>` : ''}${p.code ? '<span>יש קוד איסוף</span>' : ''}${p.kind === 'post' ? '<span>ת״ז או ייפוי כוח</span>' : ''}</div>` : ''}
+    <div class="ask-top"><span class="pkg-ico" aria-hidden="true">📦<i class="pkg-lamp ${light}"></i></span>
+      <div class="ask-t"><b><button class="pkg-name" data-act="pkg-info" data-id="${p.id}">החבילה של ${esc(pkgOwner(p))}</button></b><small>${esc(p.place)} · ${PKG_KIND_LABEL[p.kind]}</small>
+        <span class="pkg-lt ${light}"><i class="pkg-lamp ${light}"></i>${lightT}</span></div>${state}</div>
+    ${p.status !== 'done' ? `<div class="ask-chips">${due ? `<span class="${hot ? 'hot' : ''}">⏰ ${due}</span>` : ''}${p.code ? '<span>יש קוד איסוף</span>' : ''}${p.kind === 'post' ? '<span>ת״ז או ייפוי כוח</span>' : ''}${pkgSeenHtml(p)}</div>` : ''}
     ${acts}</div>`;
 }
 function pkgSection() {
@@ -1695,12 +1736,12 @@ function landingPkgBox(L) {
 }
 
 /* ---- one-time "what's new" after an update ---- */
-const WHATS_NEW = { id: 'pkg-2026-10', title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 לחצו לראות · תהנו!' };
+const WHATS_NEW = { id: 'pkg-lights-2026-10', title: '✨ עודכנה הגרסה · יש חדש בחדר המשפחה', body: 'החבילה עוברת 📦 עם נורה צבעונית ו־🐢 אקח בהמשך · תהנו!' };
 let whatsNewTries = 0;
 function maybeWhatsNew() {
   // per announcement (not per version), so a quick fix release doesn't hide it or show it twice
   const seen = LS.get('ha_seen_news', []);
-  if (seen.includes(WHATS_NEW.id) || LS.get('ha_seen_ver', '') === 'v1.10.0') return;
+  if (seen.includes(WHATS_NEW.id)) return;
   if (!S.household || S.locked || S.cover || S.booting || document.hidden) { if (whatsNewTries++ < 60) setTimeout(maybeWhatsNew, 2000); return; }
   LS.set('ha_seen_news', [...seen, WHATS_NEW.id].slice(-20));
   if (S.wasUser) showInfoBanner({ title: WHATS_NEW.title, body: WHATS_NEW.body, act: 'whats-new', persistent: true });
@@ -2269,7 +2310,11 @@ document.addEventListener('click', async e => {
     case 'ask-new': openAskForm(); break;
     case 'pkg-new': openPkgForm(); break;
     case 'pkg-take': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p && p.status !== 'open') { toast(nameOf(p.taker_id) + ' כבר על זה'); break; }
-      pkgPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id }, 'מעולה! כולם יודעים שאת/ה על זה').then(() => openPkgGo(b.dataset.id)); break; }
+      closeSheet(); pkgPatch(b.dataset.id, { status: 'taken', taker_id: S.user.id, plan_by: null, plan_when: null, plan_remind_at: null, plan_until: null, remind_plan: false }, 'מעולה! כולם יודעים שאת/ה על זה').then(() => openPkgGo(b.dataset.id)); break; }
+    case 'pkg-plan': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (p) { openSheet(pkgPlanHtml(p), '', 'pkg-plan'); if (p.user_id !== S.user.id && !(p.seen_by || []).includes(S.user.id)) { p.seen_by = [...(p.seen_by || []), S.user.id]; sb.rpc('pkg_seen', { p: p.id }).then(() => {}, () => {}); } } break; }
+    case 'pkg-plan-set': { const p = S.fam.pkgs.find(x => x.id === b.dataset.id); if (!p) break; closeSheet();
+      pkgPatch(p.id, { plan_by: S.user.id, plan_when: b.dataset.when, remind_plan: false, ...pkgPlanTimes(b.dataset.when, p) }, '🐢 ' + nameOf(p.user_id) + ' יודע/ת שתיקח/י ' + PLAN_WHEN[b.dataset.when]); break; }
+    case 'pkg-plan-off': pkgPatch(b.dataset.id, { plan_by: null, plan_when: null, plan_remind_at: null, plan_until: null, remind_plan: false }, 'החבילה חזרה לחכות למתנדב'); break;
     case 'pkg-go': openPkgGo(b.dataset.id); break;
     case 'pkg-info': openPkgInfo(b.dataset.id); break;
     case 'pkg-arrived': pkgPatch(b.dataset.id, { status: 'arrived' }); break;
