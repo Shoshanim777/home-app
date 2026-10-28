@@ -1,5 +1,9 @@
 -- home-app v1.11.0: the minute check called the server only for supermarket-trip reminders,
 -- so "מי יכול להביא לי?" and package reminders never ran by themselves. Now it calls whenever any of them is due.
+-- no backlog burst: requests older than 5 days and packages whose last day already passed stay quiet
+update public.asks set reminded = true where status = 'open' and not reminded and created_at < now() - interval '5 days';
+update public.packages set remind_due = true where status = 'open' and not remind_due and due < (now() at time zone 'Asia/Jerusalem')::date;
+
 do $$ begin perform cron.unschedule('home-app-reminders'); exception when others then null; end $$;
 select cron.schedule('home-app-reminders', '* * * * *', $cron$
   select net.http_post(
