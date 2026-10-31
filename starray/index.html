@@ -109,6 +109,43 @@ figcaption{font-size:.72em;color:var(--muted)}
 .probbtn svg{color:var(--warn);flex-shrink:0}
 .probbtn strong{display:block;font-size:1.1em;color:var(--warn)}
 .probbtn span span{font-size:.8em}
+.agentbtn{display:flex;align-items:center;gap:14px;text-decoration:none;color:var(--signal-ink);background:linear-gradient(135deg,#4FD8FF,#7FE7FF);border-radius:20px;padding:18px 16px;min-height:84px;box-shadow:0 6px 24px rgba(79,216,255,.25)}
+.agentbtn svg{flex-shrink:0}
+.agentbtn>span{flex:1;min-width:0}
+.agentbtn strong{display:block;font-size:1.25em;line-height:1.2}
+.agentbtn span span{font-size:.8em}
+.agentbtn .chev{color:var(--signal-ink)}
+.abadge{display:inline-block;margin-top:6px;font-style:normal;font-weight:700;font-size:.75em;background:var(--signal-ink);color:#7FE7FF;border-radius:999px;padding:2px 10px}
+.hrow{display:flex;gap:10px;flex-wrap:wrap}
+.hb{display:inline-flex;align-items:center;gap:8px;text-decoration:none;flex:1;justify-content:center;min-width:140px}
+.tog{display:flex;align-items:center;gap:8px;font-size:.7em;color:var(--muted);line-height:1.2;cursor:pointer}
+.msgs{display:flex;flex-direction:column;gap:10px}
+.msg{max-width:92%;border-radius:18px;padding:12px 14px;line-height:1.55;overflow-wrap:anywhere}
+.msg.me{align-self:flex-start;background:var(--signal);color:var(--signal-ink);border-bottom-right-radius:6px}
+.msg.me img{display:block;max-width:220px;border-radius:12px;margin-bottom:6px;cursor:zoom-in}
+.msg.ai{align-self:flex-end;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:6px;display:flex;flex-direction:column;gap:8px}
+.msg.dotan{align-self:flex-end;background:var(--ok-bg);border:1px solid var(--ok-line);display:flex;flex-direction:column;gap:6px}
+.msg.sys{align-self:center;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink);font-size:.85em;text-align:center}
+.who{display:flex;align-items:center;gap:6px;font-size:.72em;color:var(--muted);font-weight:500}
+.who svg{width:16px;height:16px}
+.dq{font-size:.85em;color:var(--muted);border-right:3px solid var(--ok-line);padding-right:8px}
+.aib{display:flex;gap:6px;flex-wrap:wrap}
+.mini{display:inline-flex;align-items:center;gap:4px;font-size:.75em;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:6px 11px;min-height:36px;cursor:pointer}
+.mini svg{width:16px;height:16px}
+.mini.on{border-color:var(--signal);color:var(--signal)}
+.typing{flex-direction:row!important;gap:5px!important;padding:16px}
+.typing span{width:8px;height:8px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.composer{position:sticky;bottom:calc(72px + env(safe-area-inset-bottom,0px));background:var(--bg);padding-block:8px 4px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.crow{display:flex;gap:8px;align-items:flex-end}
+.crow textarea{flex:1;min-width:0;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 14px;resize:none;min-height:52px;max-height:160px}
+.crow textarea:focus{outline:none;border-color:var(--signal)}
+.cam{min-width:52px;height:52px}
+.sendb{min-width:52px;height:52px;background:var(--signal);color:var(--signal-ink);border:0}
+.sendb:disabled{opacity:.5}
+.imgprev{display:flex;align-items:center;gap:10px}
+.imgprev img{width:84px;height:64px;object-fit:cover;border-radius:10px}
 .say{display:inline-flex;align-items:center;justify-content:center;gap:8px;align-self:flex-start}
 .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .segb{display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:right;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer;min-height:76px}
@@ -178,6 +215,11 @@ const ico={
  img:'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M21 16l-5-5-8 8"/></svg>',
  say:'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>',
  stop:'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+ agent:'<svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>',
+ cam:'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+ send:'<svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4L3 11l7 2 2 7z"/><path d="M10 13l10-9"/></svg>',
+ phone:'<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+ user:'<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
  tool:'<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>'
 };
 const QUICK=[
@@ -240,6 +282,7 @@ function home(){
  h+='<div class="brand"><div><div class="sub">Geely Starray EM-i · מדריך לנהג</div><h1>החללית החדשה</h1></div><button class="iconbtn" id="fsBtn" type="button" aria-label="גודל טקסט">א+</button></div>';
  h+='<label class="search" for="homeQ">'+ico.search+'<input id="homeQ" type="search" placeholder="מה רוצים לעשות? למשל: מזגן" autocomplete="off" enterkeyhint="search"></label>';
  al.forEach(a=>{h+='<a class="alert '+a.c+'" href="#important">'+ico.warn+'<span><strong>'+esc(a.t)+'</strong><span style="font-size:.8em">לפרטים ולעדכון</span></span></a>'});
+ h+='<a class="agentbtn" href="#agent">'+ico.agent+'<span><strong>עזרת הסוכן האישי</strong><span>שואלים כל שאלה על הרכב, במילים שלכם</span><em id="agentBadge" class="abadge" hidden></em></span>'+ico.chev+'</a>';
  h+='<a class="probbtn" href="#problems">'+ico.tool+'<span><strong>יש לי בעיה</strong><span>הרכב לא נדלק, נורה, פנצ׳ר, כבל תקוע…</span></span></a>';
  h+='<h2 class="h2">הכי שימושי</h2><div class="tiles">';
  QUICK.filter(q=>shown(byId[q[0]])).forEach(q=>{h+='<a class="tile" href="#it-'+q[0]+'"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="'+q[2]+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+q[3]+'</svg><span>'+q[1]+'</span></a>'});
@@ -250,6 +293,7 @@ function home(){
  h+='<a class="row" href="#fit"><span class="txt"><span class="t">התאמה לרכב שלנו</span><span class="d">'+(fit.trim?'רמת גימור '+fit.trim+' · ':'')+(fit.hide.length?fit.hide.length+' פונקציות מוסתרות':'מציג את כל הפונקציות')+'</span></span>'+ico.chev+'</a>';
  h+='<div class="foot">התוכן מבוסס על ספר הרכב הרשמי של ג׳ילי ישראל (2026) · © ShoshanBot</div></div>';
  app.innerHTML=h;
+ updateBadge();
  const q=document.getElementById('homeQ');
  q.addEventListener('keydown',e=>{if(e.key==='Enter'){lastQ=q.value;location.hash='search'}});
  q.addEventListener('input',()=>{lastQ=q.value});
@@ -394,6 +438,97 @@ document.addEventListener('click',e=>{const im=e.target.closest('img[data-zoom]'
 document.getElementById('lbClose').onclick=()=>{lb.hidden=true};
 document.getElementById('lbZoom').onclick=e=>{const big=lb.classList.toggle('big');e.currentTarget.textContent=big?'הקטן':'הגדל'};
 
+// personal agent (Claude via n8n)
+const API={ask:'https://shoshanbot.app.n8n.cloud/webhook/starray-ask-5c91fc2a',dotan:'https://shoshanbot.app.n8n.cloud/webhook/starray-dotan-5c91fc2a',check:'https://shoshanbot.app.n8n.cloud/webhook/starray-check-5c91fc2a'};
+const DOTAN_PHONE='';
+let devId=load('dev','');if(!devId){devId=Math.random().toString(36).slice(2)+Date.now().toString(36);save('dev',devId)}
+let chat=load('chat',[]), pend=load('pend',[]), autoread=load('autoread',false), pendImg='', busy=false, pollT=0;
+const CHIPS=['איך טוענים את הרכב בבית?','מה ההבדל בין מצבי הנהיגה?','איך מחברים את האייפון לרכב?','נדלקה לי נורה בלוח, מה עושים?','איך מפעילים את השיוט בכביש?','מה עושים אם יש פנצ׳ר?'];
+const saveChat=()=>{chat=chat.slice(-40);save('chat',chat)};
+const myName=()=>(me&&me.name)||'אלי';
+function md(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}
+async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('http '+r.status);return r.json()}
+function bubble(m,i){
+ if(m.role==='user')return '<div class="msg me">'+(m.thumb?'<img src="'+m.thumb+'" alt="תמונה שצילמתם" data-zoom="1">':'')+(m.text?'<div>'+md(m.text)+'</div>':'')+'</div>';
+ if(m.role==='sys')return '<div class="msg sys">'+md(m.text)+'</div>';
+ if(m.role==='dotan')return '<div class="msg dotan"><div class="who">'+ico.user+(m.status==='answered'?'דותן ענה':'נשלח לדותן')+'</div><div class="dq">'+md(m.q)+'</div>'+(m.status==='answered'?'<div>'+md(m.text)+'</div>':m.status==='expired'?'<div class="sub">דותן עוד לא ענה. כדאי להתקשר אליו.</div>':'<div class="sub">התשובה תופיע כאן. אפשר לסגור את האפליקציה בינתיים.</div>')+'</div>';
+ let h='<div class="msg ai"><div class="who">'+ico.agent+'הסוכן</div><div>'+md(m.text)+'</div>';
+ if(m.ids&&m.ids.length)h+='<div class="chips">'+m.ids.filter(id=>byId[id]).map(id=>'<a class="chip" href="#it-'+id+'">'+esc(byId[id].title)+'</a>').join('')+'</div>';
+ h+='<div class="aib">'+(canSpeak?'<button type="button" class="mini" data-say="'+i+'">'+ico.say+'הקרא</button>':'')+
+   '<button type="button" class="mini'+(m.fb==='up'?' on':'')+'" data-fb="up" data-i="'+i+'" aria-label="עזר לי">👍</button><button type="button" class="mini'+(m.fb==='down'?' on':'')+'" data-fb="down" data-i="'+i+'" aria-label="לא עזר">👎</button>'+
+   '<button type="button" class="mini" data-askd="'+i+'">לא עזר? שאל את דותן</button></div>';
+ return h+'</div>';
+}
+function agentView(){
+ let seen=false;chat.forEach(m=>{if(m.role==='dotan'&&m.status==='answered'&&!m.seen){m.seen=true;seen=true}});if(seen)saveChat();
+ let h='<div class="screen agent" style="display:flex;flex-direction:column;gap:12px">';
+ h+='<div class="top"><div><h1 class="title" style="font-size:2em">הסוכן האישי</h1><div class="sub">שלום '+esc(myName())+', שאלו כל שאלה על הרכב</div></div>'+
+   '<label class="tog" for="autoread"><input type="checkbox" class="sw" id="autoread"'+(autoread?' checked':'')+'><span>הקראה<br>אוטומטית</span></label></div>';
+ h+='<div class="hrow"><button type="button" class="btn ghost hb" id="askDotan">'+ico.user+'שאל את דותן</button>'+(DOTAN_PHONE?'<a class="btn ghost hb" href="tel:'+DOTAN_PHONE+'">'+ico.phone+'חייג לדותן</a>':'')+'</div>';
+ h+='<div id="msgs" class="msgs">';
+ if(!chat.length)h+='<div class="msg ai"><div class="who">'+ico.agent+'הסוכן</div><div>שלום '+esc(myName())+'! אני מכיר את כל ספר הרכב. אפשר לשאול אותי כל דבר, במילים פשוטות, או לצלם נורה שנדלקה ואסביר מה היא אומרת.</div></div>';
+ chat.forEach((m,i)=>h+=bubble(m,i));
+ if(busy)h+='<div class="msg ai typing"><span></span><span></span><span></span></div>';
+ h+='</div>';
+ if(!chat.length)h+='<div class="chips">'+CHIPS.map(c=>'<button type="button" class="chip" data-chip="'+esc(c)+'">'+esc(c)+'</button>').join('')+'</div>';
+ h+='<form class="composer" id="cmp">'+(pendImg?'<div class="imgprev"><img src="'+pendImg+'" alt="התמונה שתישלח"><button type="button" class="mini" id="rmImg">הסר תמונה</button></div>':'')+
+   '<div class="crow"><label class="iconbtn cam" for="camIn" aria-label="צלם נורה">'+ico.cam+'</label><input type="file" id="camIn" accept="image/*" capture="environment" hidden>'+
+   '<textarea id="q" rows="1" placeholder="כתבו או הכתיבו שאלה…" enterkeyhint="send"></textarea>'+
+   '<button type="submit" class="iconbtn sendb" aria-label="שליחה"'+(busy?' disabled':'')+'>'+ico.send+'</button></div>'+
+   '<div class="sub" style="font-size:.65em">תשובות של AI לפי ספר הרכב. לא מחליף מוסך. בנורה אדומה – עוצרים ומתקשרים.</div></form>';
+ app.innerHTML=h+'</div>';
+ const ms=document.getElementById('msgs');setTimeout(()=>{(ms.lastElementChild||ms).scrollIntoView({block:'end'})},30);
+ const qi=document.getElementById('q');
+ qi.addEventListener('input',()=>{qi.style.height='auto';qi.style.height=Math.min(qi.scrollHeight,160)+'px'});
+ document.getElementById('cmp').onsubmit=e=>{e.preventDefault();ask(qi.value)};
+ qi.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!/iPhone|iPad|Android/.test(navigator.userAgent)){e.preventDefault();ask(qi.value)}});
+ document.getElementById('autoread').onchange=e=>{autoread=e.target.checked;save('autoread',autoread)};
+ document.getElementById('camIn').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,1280,.82).then(d=>{pendImg=d;agentView()}).catch(()=>{sysMsg('לא הצלחתי לקרוא את התמונה. נסו שוב.')})};
+ const rm=document.getElementById('rmImg');if(rm)rm.onclick=()=>{pendImg='';agentView()};
+ document.getElementById('askDotan').onclick=()=>{const t=qi.value.trim();if(!t){qi.placeholder='כתבו כאן מה לשאול את דותן, ואז לחצו שוב "שאל את דותן"';qi.focus();return}askDotan(t,'')};
+ app.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>ask(b.dataset.chip));
+ app.querySelectorAll('[data-say]').forEach(b=>b.onclick=()=>say(chat[+b.dataset.say].text));
+ app.querySelectorAll('[data-fb]').forEach(b=>b.onclick=()=>{const m=chat[+b.dataset.i];m.fb=b.dataset.fb;saveChat();agentView();post(API.ask,{type:'feedback',mid:m.mid,v:m.fb,device:devId}).catch(()=>{})});
+ app.querySelectorAll('[data-askd]').forEach(b=>b.onclick=()=>{const i=+b.dataset.askd;let q='';for(let j=i-1;j>=0;j--)if(chat[j].role==='user'){q=chat[j].text||'(שלח תמונה)';break}askDotan(q,chat[i].text)});
+ if(pend.length)checkDotan();
+}
+function sysMsg(t){chat.push({role:'sys',text:t});saveChat();if(location.hash==='#agent')agentView()}
+function shrink(file,max,q){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',q))};im.onerror=rej;im.src=u})}
+async function ask(text){
+ text=String(text||'').trim(); if(busy||(!text&&!pendImg))return;
+ if(!navigator.onLine){sysMsg('אין חיבור לאינטרנט כרגע. הסוכן צריך אינטרנט. אפשר בינתיים לחפש בנושאים, הם עובדים גם בלי חיבור.');return}
+ const img=pendImg; pendImg='';
+ const thumb=img?await new Promise(r=>{const im=new Image();im.onload=()=>{const s=360/Math.max(im.width,im.height),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);r(c.toDataURL('image/jpeg',.7))};im.src=img}):'';
+ const history=chat.filter(m=>m.role==='user'||m.role==='ai').slice(-6).map(m=>({role:m.role==='ai'?'assistant':'user',text:m.text||'(תמונה)'}));
+ chat.push({role:'user',text,thumb});saveChat();busy=true;agentView();
+ try{
+  const ids=text?find(text).slice(0,5).map(i=>i.id):[];
+  const r=await post(API.ask,{device:devId,name:myName(),trim:fit.trim||'',question:text,image:img||undefined,ids,history});
+  if(r.answer){chat.push({role:'ai',text:r.answer,ids:r.ids||[],mid:r.mid||'',fb:''});if(autoread&&r.ok)say(r.answer)}
+  else chat.push({role:'sys',text:'לא הצלחתי לקבל תשובה כרגע. נסו שוב בעוד רגע.'});
+ }catch(e){chat.push({role:'sys',text:'לא הצלחתי להתחבר לסוכן. בדקו שיש אינטרנט ונסו שוב.'})}
+ busy=false;saveChat();if(location.hash==='#agent')agentView();
+}
+async function askDotan(q,ai){
+ if(!navigator.onLine){sysMsg('אין חיבור לאינטרנט. נסו שוב כשיהיה חיבור'+(DOTAN_PHONE?', או התקשרו לדותן.':'.'));return}
+ try{const r=await post(API.dotan,{device:devId,name:myName(),question:q,ai});
+  if(r.ok){chat.push({role:'dotan',q,pid:r.id,status:'pending',text:''});pend.push(r.id);save('pend',pend);saveChat();agentView()}else throw 0;
+ }catch(e){sysMsg('השליחה לדותן לא הצליחה. נסו שוב.')}
+}
+async function checkDotan(){
+ if(!pend.length||!navigator.onLine)return;
+ try{const r=await post(API.check,{device:devId,ids:pend});let changed=false;
+  (r.items||[]).forEach(it=>{const m=chat.find(x=>x.role==='dotan'&&x.pid===it.id);
+   if(it.status==='answered'||it.status==='expired'||it.status==='unknown'){pend=pend.filter(p=>p!==it.id);changed=true;
+    if(m&&it.status!=='unknown'){m.status=it.status;m.text=it.answer||''}
+    if(it.status==='answered'&&autoread&&location.hash==='#agent')say('דותן ענה: '+it.answer)}});
+  if(changed){save('pend',pend);saveChat();updateBadge();if(location.hash==='#agent')agentView()}
+ }catch(e){}
+}
+function updateBadge(){const n=chat.filter(m=>m.role==='dotan'&&m.status==='answered'&&!m.seen).length;const el=document.getElementById('agentBadge');if(el){el.hidden=!n;el.textContent=n?'דותן ענה לך!':''}}
+setInterval(()=>{if(pend.length&&!document.hidden)checkDotan()},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDotan()});
+
 // join: one-time sign-up, notifies the owner on Telegram via n8n
 const JOIN_URL='https://shoshanbot.app.n8n.cloud/webhook/starray-join-qrnravoq';
 let me=load('me',null);
@@ -430,6 +565,7 @@ function route(){
  else if(h.startsWith('pr-')){problem(h.slice(3));tab='problems'}
  else if(h==='problems'){problems();tab='problems'}
  else if(h==='fit'){fitView();tab='home'}
+ else if(h==='agent'){agentView();tab='home'}
  else if(h.startsWith('ch-')){chapter(+h.slice(3));tab='topics'}
  else if(h==='topics'){topics();tab='topics'}
  else if(h==='search'){searchView();tab='search'}
