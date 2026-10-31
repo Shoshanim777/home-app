@@ -454,7 +454,7 @@ function bubble(m,i){
  if(m.role==='dotan')return '<div class="msg dotan"><div class="who">'+ico.user+(m.status==='answered'?'דותן ענה':'נשלח לדותן')+'</div><div class="dq">'+md(m.q)+'</div>'+(m.status==='answered'?'<div>'+md(m.text)+'</div>':m.status==='expired'?'<div class="sub">דותן עוד לא ענה. כדאי להתקשר אליו.</div>':'<div class="sub">התשובה תופיע כאן. אפשר לסגור את האפליקציה בינתיים.</div>')+'</div>';
  let h='<div class="msg ai"><div class="who">'+ico.agent+'הסוכן</div><div>'+md(m.text)+'</div>';
  if(m.ids&&m.ids.length)h+='<div class="chips">'+m.ids.filter(id=>byId[id]).map(id=>'<a class="chip" href="#it-'+id+'">'+esc(byId[id].title)+'</a>').join('')+'</div>';
- h+='<div class="aib">'+(canSpeak?'<button type="button" class="mini" data-say="'+i+'">'+ico.say+'הקרא</button>':'')+
+ h+='<div class="aib">'+(!m.detail&&m.mid?'<button type="button" class="mini more" data-more="'+i+'">הסבר לי יותר</button>':'')+(canSpeak?'<button type="button" class="mini" data-say="'+i+'">'+ico.say+'הקרא</button>':'')+
    '<button type="button" class="mini'+(m.fb==='up'?' on':'')+'" data-fb="up" data-i="'+i+'" aria-label="עזר לי">👍</button><button type="button" class="mini'+(m.fb==='down'?' on':'')+'" data-fb="down" data-i="'+i+'" aria-label="לא עזר">👎</button>'+
    '<button type="button" class="mini" data-askd="'+i+'">לא עזר? שאל את דותן</button></div>';
  return h+'</div>';
@@ -465,6 +465,7 @@ function agentView(){
  h+='<div class="top"><div><h1 class="title" style="font-size:2em">הסוכן האישי</h1><div class="sub">שלום '+esc(myName())+', שאלו כל שאלה על הרכב</div></div>'+
    '<label class="tog" for="autoread"><input type="checkbox" class="sw" id="autoread"'+(autoread?' checked':'')+'><span>הקראה<br>אוטומטית</span></label></div>';
  h+='<div class="hrow"><button type="button" class="btn ghost hb" id="askDotan">'+ico.user+'שאל את דותן</button>'+(DOTAN_PHONE?'<a class="btn ghost hb" href="tel:'+DOTAN_PHONE+'">'+ico.phone+'חייג לדותן</a>':'')+'</div>';
+ if(chat.length)h+='<div id="newWrap" style="display:flex;justify-content:flex-end"><button type="button" class="mini" id="newChat">שיחה חדשה</button></div>';
  h+='<div id="msgs" class="msgs">';
  if(!chat.length)h+='<div class="msg ai"><div class="who">'+ico.agent+'הסוכן</div><div>שלום '+esc(myName())+'! אני מכיר את כל ספר הרכב. אפשר לשאול אותי כל דבר, במילים פשוטות, או לצלם נורה שנדלקה ואסביר מה היא אומרת.</div></div>';
  chat.forEach((m,i)=>h+=bubble(m,i));
@@ -485,7 +486,9 @@ function agentView(){
  document.getElementById('camIn').onchange=e=>{const f=e.target.files[0];if(f)shrink(f,1280,.82).then(d=>{pendImg=d;agentView()}).catch(()=>{sysMsg('לא הצלחתי לקרוא את התמונה. נסו שוב.')})};
  const rm=document.getElementById('rmImg');if(rm)rm.onclick=()=>{pendImg='';agentView()};
  document.getElementById('askDotan').onclick=()=>{const t=qi.value.trim();if(!t){qi.placeholder='כתבו כאן מה לשאול את דותן, ואז לחצו שוב "שאל את דותן"';qi.focus();return}askDotan(t,'')};
- app.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>ask(b.dataset.chip));
+ const nc=document.getElementById('newChat');
+ if(nc)nc.onclick=()=>{if(nc.dataset.sure){stopSpeak();chat=chat.filter(m=>m.role==='dotan'&&m.status==='pending');saveChat();agentView()}else{nc.dataset.sure='1';nc.textContent='בטוח? לחצו שוב כדי למחוק את השיחה';nc.classList.add('on');setTimeout(()=>{if(nc.isConnected){delete nc.dataset.sure;nc.textContent='שיחה חדשה';nc.classList.remove('on')}},4000)}};
+ app.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>{const i=+b.dataset.more;let q='';for(let j=i-1;j>=0;j--)if(chat[j].role==='user'){q=chat[j].text;break}chat[i].detail=true;saveChat();ask('הסבר לי יותר'+(q?': '+q:''),true)});
  app.querySelectorAll('[data-say]').forEach(b=>b.onclick=()=>say(chat[+b.dataset.say].text));
  app.querySelectorAll('[data-fb]').forEach(b=>b.onclick=()=>{const m=chat[+b.dataset.i];m.fb=b.dataset.fb;saveChat();agentView();post(API.ask,{type:'feedback',mid:m.mid,v:m.fb,device:devId}).catch(()=>{})});
  app.querySelectorAll('[data-askd]').forEach(b=>b.onclick=()=>{const i=+b.dataset.askd;let q='';for(let j=i-1;j>=0;j--)if(chat[j].role==='user'){q=chat[j].text||'(שלח תמונה)';break}askDotan(q,chat[i].text)});
@@ -493,7 +496,8 @@ function agentView(){
 }
 function sysMsg(t){chat.push({role:'sys',text:t});saveChat();if(location.hash==='#agent')agentView()}
 function shrink(file,max,q){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',q))};im.onerror=rej;im.src=u})}
-async function ask(text){
+function myPhones(){const p={};if(info.tow)p['גרר / שירותי דרך']=info.tow;if(info.geely)p['מוקד ג׳ילי']=info.geely;if(info.insPhone)p['ביטוח']=info.insPhone;if(info.family)p['בן משפחה']=info.family;if(DOTAN_PHONE)p['דותן']=DOTAN_PHONE;return p}
+async function ask(text,detail){
  text=String(text||'').trim(); if(busy||(!text&&!pendImg))return;
  if(!navigator.onLine){sysMsg('אין חיבור לאינטרנט כרגע. הסוכן צריך אינטרנט. אפשר בינתיים לחפש בנושאים, הם עובדים גם בלי חיבור.');return}
  const img=pendImg; pendImg='';
@@ -501,9 +505,9 @@ async function ask(text){
  const history=chat.filter(m=>m.role==='user'||m.role==='ai').slice(-6).map(m=>({role:m.role==='ai'?'assistant':'user',text:m.text||'(תמונה)'}));
  chat.push({role:'user',text,thumb});saveChat();busy=true;agentView();
  try{
-  const ids=text?find(text).slice(0,5).map(i=>i.id):[];
-  const r=await post(API.ask,{device:devId,name:myName(),trim:fit.trim||'',question:text,image:img||undefined,ids,history});
-  if(r.answer){chat.push({role:'ai',text:r.answer,ids:r.ids||[],mid:r.mid||'',fb:''});if(autoread&&r.ok)say(r.answer)}
+  const ids=text?find(text.replace(/^הסבר לי יותר:?\s*/,'')).slice(0,5).map(i=>i.id):[];
+  const r=await post(API.ask,{device:devId,name:myName(),trim:fit.trim||'',question:text,image:img||undefined,ids,history,detail:!!detail,phones:myPhones()});
+  if(r.answer){chat.push({role:'ai',text:r.answer,ids:r.ids||[],mid:r.mid||'',fb:'',detail:!!detail||!r.ok});if(autoread&&r.ok)say(r.answer)}
   else chat.push({role:'sys',text:'לא הצלחתי לקבל תשובה כרגע. נסו שוב בעוד רגע.'});
  }catch(e){chat.push({role:'sys',text:'לא הצלחתי להתחבר לסוכן. בדקו שיש אינטרנט ונסו שוב.'})}
  busy=false;saveChat();if(location.hash==='#agent')agentView();
