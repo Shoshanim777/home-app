@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>החללית החדשה</title>
+<title>החללית של אלי</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="החללית">
+<meta name="apple-mobile-web-app-title" content="החללית של אלי">
 <meta name="theme-color" content="#070C1C">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -64,7 +64,10 @@ h1,h2,h3{margin:0;text-wrap:balance}
 .thumb.none{display:flex;align-items:center;justify-content:center;background:var(--panel-2);border:1px dashed var(--line);color:var(--muted)}
 .list{display:flex;flex-direction:column;gap:10px}
 .sos{display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:var(--bad-ink);background:var(--bad);border-radius:16px;min-height:58px;font-weight:700;font-size:1.05em}
-.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;min-height:44px;font-size:.9em}
+.back{display:none}
+.backbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:8;background:var(--bg);max-width:560px;margin:0 auto;padding-block:10px 6px;border-bottom:1px solid #1C2A4F}
+.backbar button{display:inline-flex;align-items:center;gap:6px;min-height:48px;padding:0 18px 0 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--ink);font:inherit;font-weight:500;cursor:pointer}
+.backbar button svg{color:var(--signal)}
 .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pills{display:flex;gap:8px;flex-wrap:wrap}
 .pill{font-size:.72em;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
@@ -169,6 +172,7 @@ nav.tabs a.on{color:var(--signal)}
 @media (prefers-reduced-motion:no-preference){.screen{animation:in .18s ease-out}@keyframes in{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}}
 </style>
 
+<div class="backbar" id="backbar" dir="rtl" hidden><button type="button" id="backBtn" aria-label="חזרה למסך הקודם"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>חזור</button></div>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}</style>
 </head>
 <body>
@@ -279,7 +283,7 @@ function itemRow(it,sub){return '<a class="row" href="#it-'+it.id+'">'+thumb(it)
 function home(){
  const al=[docState('טסט',info.test),docState('ביטוח',info.ins),docState('טיפול',info.svc)].filter(x=>x&&x.c!=='ok');
  let h='<div class="screen wrap-inner" style="display:flex;flex-direction:column;gap:16px">';
- h+='<div class="brand"><div><div class="sub">Geely Starray EM-i · מדריך לנהג</div><h1>החללית החדשה</h1></div><button class="iconbtn" id="fsBtn" type="button" aria-label="גודל טקסט">א+</button></div>';
+ h+='<div class="brand"><div><div class="sub">Geely Starray EM-i · מדריך לנהג</div><h1>החללית של אלי</h1></div><button class="iconbtn" id="fsBtn" type="button" aria-label="גודל טקסט">א+</button></div>';
  h+='<label class="search" for="homeQ">'+ico.search+'<input id="homeQ" type="search" placeholder="מה רוצים לעשות? למשל: מזגן" autocomplete="off" enterkeyhint="search"></label>';
  al.forEach(a=>{h+='<a class="alert '+a.c+'" href="#important">'+ico.warn+'<span><strong>'+esc(a.t)+'</strong><span style="font-size:.8em">לפרטים ולעדכון</span></span></a>'});
  h+='<a class="agentbtn" href="#agent">'+ico.agent+'<span><strong>עזרת הסוכן האישי</strong><span>שואלים כל שאלה על הרכב, במילים שלכם</span><em id="agentBadge" class="abadge" hidden></em></span>'+ico.chev+'</a>';
@@ -291,7 +295,7 @@ function home(){
  h+='<a class="row" href="#topics"><span class="txt"><span class="t">כל הנושאים בספר הרכב</span><span class="d">16 פרקים · '+ITEMS.filter(shown).length+' נושאים</span></span>'+ico.chev+'</a>';
  h+='<a class="sos" href="#important"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 4h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>תקלה בדרך? חירום</a>';
  h+='<a class="row" href="#fit"><span class="txt"><span class="t">התאמה לרכב שלנו</span><span class="d">'+(fit.trim?'רמת גימור '+fit.trim+' · ':'')+(fit.hide.length?fit.hide.length+' פונקציות מוסתרות':'מציג את כל הפונקציות')+'</span></span>'+ico.chev+'</a>';
- h+='<div class="foot">החללית החדשה · גרסה '+APP_VER+' · '+APP_DATE+'<br>התוכן מבוסס על ספר הרכב הרשמי של ג׳ילי ישראל (2026) · © ShoshanBot</div></div>';
+ h+='<div class="foot">החללית של אלי · גרסה '+APP_VER+' · '+APP_DATE+'<br>התוכן מבוסס על ספר הרכב הרשמי של ג׳ילי ישראל (2026) · © ShoshanBot</div></div>';
  app.innerHTML=h;
  updateBadge();
  const q=document.getElementById('homeQ');
@@ -426,7 +430,7 @@ function fitView(){
  h+='</div><div class="note t">'+ico.tip+'<span>רמת הגימור כתובה ברישיון הרכב או בחשבונית הקנייה. אפשר גם לבדוק ברכב: יש חלון בגג? יש תצוגה על השמשה?</span></div>';
  h+='<h2 class="h2">מה יש ברכב שלנו</h2><div class="group">';
  OPT.forEach(o=>{const on=!fit.hide.includes(o[0]);h+='<div><label for="o'+o[0]+'" style="flex:1">'+esc(o[1])+'</label><input type="checkbox" class="sw" id="o'+o[0]+'" data-opt="'+o[0]+'"'+(on?' checked':'')+'></div>'});
- h+='</div><div class="sub">ההגדרה נשמרת בטלפון הזה בלבד. כדאי לעשות אותה בטלפון של ההורים.</div><div class="foot">החללית החדשה · גרסה '+APP_VER+' · '+APP_DATE+'</div></div>';
+ h+='</div><div class="sub">ההגדרה נשמרת בטלפון הזה בלבד. כדאי לעשות אותה בטלפון של ההורים.</div><div class="foot">החללית של אלי · גרסה '+APP_VER+' · '+APP_DATE+'</div></div>';
  app.innerHTML=h;
  app.querySelectorAll('[data-trim]').forEach(b=>b.onclick=()=>{const t=b.dataset.trim;fit={trim:t,hide:t?PRESET[t].slice():[]};save('fit',fit);fitView()});
  app.querySelectorAll('[data-opt]').forEach(cb=>cb.onchange=()=>{const id=+cb.dataset.opt;fit.hide=fit.hide.filter(x=>x!==id);if(!cb.checked)fit.hide.push(id);save('fit',fit)});
@@ -441,7 +445,7 @@ document.getElementById('lbZoom').onclick=e=>{const big=lb.classList.toggle('big
 // personal agent (Claude via n8n)
 const API={ask:'https://shoshanbot.app.n8n.cloud/webhook/starray-ask-5c91fc2a',dotan:'https://shoshanbot.app.n8n.cloud/webhook/starray-dotan-5c91fc2a',check:'https://shoshanbot.app.n8n.cloud/webhook/starray-check-5c91fc2a'};
 const DOTAN_PHONE='+972544440301';
-const APP_VER='1.5', APP_DATE='31.10.2026';
+const APP_VER='1.6', APP_DATE='31.10.2026';
 const VAPID_PUB='BEyMECaXnjtjocbel4BwqCkU4ZX2roTfkL4B2FzF_J5C8dxTZ5-8uy1txgsVexqS0T5ldNK11WTC2gUMjkmOgOE';
 const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const standalone=window.matchMedia&&matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
@@ -604,8 +608,15 @@ function route(){
  else if(h==='important'){important();tab='important'}
  else home();
  document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.tab===tab));
+ const bb=document.getElementById('backbar');bb.hidden=(h==='home'||h==='');
  if(h!=='search')window.scrollTo(0,0);
 }
+// back button: one step back inside the app; if there is no earlier screen, go to the logical parent
+let navDepth=0;
+window.addEventListener('hashchange',()=>{navDepth++});
+function parentOf(h){if(h.startsWith('it-')){const it=byId[+h.slice(3)];return it?'ch-'+it.ci:'topics'}if(h.startsWith('ch-'))return 'topics';if(h.startsWith('pr-'))return 'problems';return 'home'}
+function goBack(){const h=(location.hash||'#home').slice(1);if(navDepth>0&&history.length>1){navDepth-=2;history.back()}else{location.hash=parentOf(h)}}
+document.getElementById('backBtn').onclick=goBack;
 window.addEventListener('hashchange',route);route();
 sendJoin();window.addEventListener('online',sendJoin);
 setTimeout(refreshPush,3000);
