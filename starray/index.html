@@ -394,10 +394,37 @@ document.addEventListener('click',e=>{const im=e.target.closest('img[data-zoom]'
 document.getElementById('lbClose').onclick=()=>{lb.hidden=true};
 document.getElementById('lbZoom').onclick=e=>{const big=lb.classList.toggle('big');e.currentTarget.textContent=big?'הקטן':'הגדל'};
 
+// join: one-time sign-up, notifies the owner on Telegram via n8n
+const JOIN_URL='https://shoshanbot.app.n8n.cloud/webhook/starray-join-qrnravoq';
+let me=load('me',null);
+function deviceName(){const u=navigator.userAgent;return /iPhone/.test(u)?'iPhone':/iPad/.test(u)?'iPad':/Android/.test(u)?'Android':/Macintosh/.test(u)?'Mac':/Windows/.test(u)?'Windows':'אחר'}
+function sendJoin(){if(!me||me.sent)return;
+ const body=new URLSearchParams({name:me.name,email:me.email,device:deviceName()});
+ fetch(JOIN_URL,{method:'POST',mode:'no-cors',body}).then(()=>{me.sent=true;save('me',me)}).catch(()=>{});}
+function joinView(){
+ document.querySelector('nav.tabs').hidden=true;
+ app.innerHTML='<div class="screen" style="display:flex;flex-direction:column;gap:18px;padding-top:24px">'+
+  '<div><div class="sub">Geely Starray EM-i · מדריך לנהג</div><h1 class="brand" style="font-family:var(--f-display);font-size:3em;line-height:.9;color:var(--signal)">ברוכים הבאים לחללית</h1></div>'+
+  '<p class="lead">לפני שמתחילים, כמה פרטים קצרים. זה נעשה פעם אחת בלבד.</p>'+
+  '<form class="form" id="joinForm" novalidate>'+
+  '<label for="j_name">שם<input id="j_name" name="name" type="text" autocomplete="name" required></label>'+
+  '<label for="j_email">מייל<input id="j_email" name="email" type="email" inputmode="email" autocomplete="email" dir="ltr" required></label>'+
+  '<div id="joinErr" class="sub" style="color:var(--bad)" hidden></div>'+
+  '<button class="btn" type="submit">כניסה לאפליקציה</button></form>'+
+  '<div class="sub">השם והמייל נשלחים לדותן, שבנה את האפליקציה, כדי שיידע מי משתמש בה. שאר הפרטים שתזינו נשארים רק במכשיר הזה.</div></div>';
+ document.getElementById('joinForm').onsubmit=e=>{e.preventDefault();
+  const n=document.getElementById('j_name').value.trim(),m=document.getElementById('j_email').value.trim(),err=document.getElementById('joinErr');
+  if(!n){err.textContent='צריך למלא שם.';err.hidden=false;return}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m)){err.textContent='כתובת המייל לא נראית תקינה. בדקו שוב.';err.hidden=false;return}
+  me={name:n,email:m,at:Date.now(),sent:false};save('me',me);sendJoin();
+  document.querySelector('nav.tabs').hidden=false;location.hash='fit';route()};
+}
+
 // router
 function go(h){location.hash=h}
 function route(){
  lb.hidden=true;stopSpeak();
+ if(!me){joinView();return}
  const h=(location.hash||'#home').slice(1);let tab='home';
  if(h.startsWith('it-')){item(+h.slice(3));tab='topics'}
  else if(h.startsWith('pr-')){problem(h.slice(3));tab='problems'}
@@ -412,6 +439,7 @@ function route(){
  if(h!=='search')window.scrollTo(0,0);
 }
 window.addEventListener('hashchange',route);route();
+sendJoin();window.addEventListener('online',sendJoin);
 if('serviceWorker' in navigator&&location.protocol==='https:'){try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}}
 })();
 </script>
